@@ -1,0 +1,82 @@
+package com.miguelcaldas.mcsmsforwarderwhatsapp.util
+
+import android.content.Context
+import android.content.SharedPreferences
+import androidx.core.content.edit
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+
+object LogUtils {
+    private const val PREFS = "mc_sms_fwd_wa"
+    private const val LOGS_KEY = "logs_v2"
+    private const val FIELD_SEP = "\u001F"
+    private const val LINE_SEP = "\n"
+    private val RETENTION_MS = TimeUnit.DAYS.toMillis(35)
+    private const val MAX_ENTRIES = 2000
+
+    // Single-thread executor: addToLog reads + serializes the whole log file, so
+    // concurrent writers from SmsReceiver, WhatsAppCloudChannel, BootReceiver, and
+    // RegexTesterActivity would race. Serializing them off the main thread keeps
+    // broadcast onReceive callbacks snappy and avoids interleaved prune/write.
+    private val writeExecutor = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "mc-log-writer").apply { isDaemon = true }
+    }
+
+    private data class Entry(val timestamp: Long, val message: String)
+
+    fun addToLog(context: Context, logEntry: String) {
+        val appContext = context.applicationContext
+        val timestamp = System.currentTimeMillis()
+        writeExecutor.execute {
+            val prefs = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            val entries = loadEntries(prefs).toMutableList()
+            entries.add(Entry(timestamp, logEntry))
+            val pruned = prune(entries)
+            prefs.edit { putString(LOGS_KEY, serialize(pruned)) }
+        }
+    }
+
+    /** Most recent first, formatted for display. */
+    fun getLogs(context: Context): List<String> {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val entries = loadEntries(prefs)
+        val fmt = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault())
+        return entries
+            .sortedByDescending { it.timestamp }
+            .map { "${fmt.format(Date(it.timestamp))} → ${it.message}" }
+    }
+
+    fun clearLogs(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        prefs.edit { remove(LOGS_KEY) }
+    }
+
+    private fun loadEntries(prefs: SharedPreferences): List<Entry> =
+        parse(prefs.getString(LOGS_KEY, null) ?: "")
+
+    private fun prune(entries: MutableList<Entry>): List<Entry> {
+        val cutoff = System.currentTimeMillis() - RETENTION_MS
+        entries.removeAll { it.timestamp < cutoff }
+        if (entries.size > MAX_ENTRIES) {
+            entries.sortBy { it.timestamp }
+            repeat(entries.size - MAX_ENTRIES) { entries.removeAt(0) }
+        }
+        return entries
+    }
+
+    private fun serialize(entries: List<Entry>): String =
+        entries.joinToString(LINE_SEP) { "${it.timestamp}$FIELD_SEP${it.message}" }
+
+    private fun parse(raw: String): List<Entry> {
+        if (raw.isEmpty()) return emptyList()
+        return raw.split(LINE_SEP).mapNotNull { line ->
+            val idx = line.indexOf(FIELD_SEP)
+            if (idx <= 0) return@mapNotNull null
+            val ts = line.substring(0, idx).toLongOrNull() ?: return@mapNotNull null
+            Entry(ts, line.substring(idx + 1))
+        }
+    }
+}

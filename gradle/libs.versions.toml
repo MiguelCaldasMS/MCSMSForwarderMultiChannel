@@ -1,0 +1,25 @@
+[versions]
+# Build System
+agp = "8.13.0"
+kotlin = "2.0.21"
+
+# Android SDK
+compileSdk = "36"
+minSdk = "33"
+targetSdk = "36"
+
+# Libraries
+googleMaterial = "1.13.0"
+androidxCoreKtx = "1.17.0"
+androidxAppCompat = "1.7.1"
+androidxActivity = "1.11.0"
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "androidxCoreKtx" }
+androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "androidxAppCompat" }
+androidx-activity-ktx = { group = "androidx.activity", name = "activity-ktx", version.ref = "androidxActivity" }
+google-material = { group = "com.google.android.material", name = "material", version.ref = "googleMaterial" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }

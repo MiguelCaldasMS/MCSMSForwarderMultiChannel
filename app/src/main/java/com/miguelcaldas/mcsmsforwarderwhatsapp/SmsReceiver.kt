@@ -1,0 +1,78 @@
+package com.miguelcaldas.mcsmsforwarderwhatsapp
+
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.provider.Telephony
+import com.miguelcaldas.mcsmsforwarderwhatsapp.util.ForwardTemplate
+import com.miguelcaldas.mcsmsforwarderwhatsapp.util.LogUtils
+import com.miguelcaldas.mcsmsforwarderwhatsapp.util.RegexListStore
+import com.miguelcaldas.mcsmsforwarderwhatsapp.util.SenderListStore
+import com.miguelcaldas.mcsmsforwarderwhatsapp.util.SenderMatcher
+import com.miguelcaldas.mcsmsforwarderwhatsapp.util.TextNormalizer
+import com.miguelcaldas.mcsmsforwarderwhatsapp.util.WhatsAppCloudChannel
+import com.miguelcaldas.mcsmsforwarderwhatsapp.util.WhatsAppConfig
+
+class SmsReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
+
+        val prefs = context.getSharedPreferences("mc_sms_fwd_wa", Context.MODE_PRIVATE)
+        // Master kill-switch: one prefs key checked before any work. Default ON so existing
+        // installs are unaffected.
+        if (!prefs.getBoolean("master_enabled", true)) return
+
+        val waConfig = WhatsAppConfig.load(prefs)
+        // Without credentials/recipient there is nowhere to forward; bail before reading
+        // anything else or doing any normalization / matching work.
+        if (!waConfig.hasCredentials) return
+
+        val allowedSenders = SenderListStore.load(prefs)
+        if (allowedSenders.isEmpty()) return
+        val patterns = RegexListStore.load(prefs)
+        if (patterns.isEmpty()) return
+        val forwardTemplate = prefs.getString("forwardTemplate", "").orEmpty()
+
+        // The telephony framework reassembles concatenated SMS using the UDH (reference,
+        // total parts, sequence number) and only broadcasts SMS_RECEIVED once every part
+        // has arrived. The returned array therefore represents a single logical message
+        // with its segments already ordered; concatenating their bodies yields the full text.
+        val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent) ?: return
+        if (messages.isEmpty()) return
+
+        val sender = messages[0].originatingAddress ?: return
+        val fullBody = buildString {
+            for (sms in messages) append(sms.messageBody ?: "")
+        }
+
+        val countryIso = SenderMatcher.deviceCountryIso(context)
+        if (!SenderMatcher.matches(allowedSenders, sender, countryIso)) return
+
+        // Compile each pattern at most once per call; the previous form rebuilt Regex
+        // objects inside `any { }` on every iteration. Patterns that fail to compile
+        // are silently treated as non-matches — a single malformed entry never blocks
+        // the others. Diacritics are stripped and the body is lowercased before matching
+        // so patterns can be written without accents or case worries; the original body
+        // (accents and case preserved) is still what gets forwarded.
+        val normalizedBody = TextNormalizer.normalizeForMatching(fullBody)
+        val bodyMatches = patterns.asSequence()
+            .mapNotNull { runCatching { Regex(it) }.getOrNull() }
+            .any { it.containsMatchIn(normalizedBody) }
+        if (!bodyMatches) return
+
+        val outgoingBody = if (forwardTemplate.isEmpty()) fullBody
+            else ForwardTemplate.apply(forwardTemplate, sender, messages[0].timestampMillis, fullBody)
+
+        // Network I/O must outlive onReceive returning, so hand the receiver off to
+        // goAsync() and let WhatsAppCloudChannel call finish() when the HTTP exchange
+        // completes (success, error, or timeout).
+        val pending = goAsync()
+        LogUtils.addToLog(
+            context,
+            "REAL SEND → To: ${waConfig.recipient} | Msg: $outgoingBody"
+        )
+        WhatsAppCloudChannel.send(context, waConfig, outgoingBody) {
+            pending.finish()
+        }
+    }
+}

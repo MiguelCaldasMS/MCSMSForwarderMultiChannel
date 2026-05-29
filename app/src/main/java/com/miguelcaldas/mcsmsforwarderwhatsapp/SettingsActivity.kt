@@ -1,0 +1,348 @@
+package com.miguelcaldas.mcsmsforwarderwhatsapp
+
+import android.content.Context
+import android.content.Intent
+import android.content.SharedPreferences
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.telephony.PhoneNumberUtils
+import android.view.LayoutInflater
+import android.view.View
+import android.widget.EditText
+import android.widget.LinearLayout
+import androidx.activity.enableEdgeToEdge
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.edit
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
+import androidx.core.widget.addTextChangedListener
+import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.materialswitch.MaterialSwitch
+import com.google.android.material.snackbar.Snackbar
+import com.google.android.material.textfield.TextInputLayout
+import com.miguelcaldas.mcsmsforwarderwhatsapp.util.LogUtils
+import com.miguelcaldas.mcsmsforwarderwhatsapp.util.RegexListStore
+import com.miguelcaldas.mcsmsforwarderwhatsapp.util.SenderListStore
+import com.miguelcaldas.mcsmsforwarderwhatsapp.util.WhatsAppCloudChannel
+import com.miguelcaldas.mcsmsforwarderwhatsapp.util.WhatsAppConfig
+
+class SettingsActivity : AppCompatActivity() {
+
+    private lateinit var prefs: SharedPreferences
+    private lateinit var rootContainer: View
+    private lateinit var sendersContainer: LinearLayout
+    private lateinit var regexesContainer: LinearLayout
+
+    private lateinit var waPhoneNumberIdLayout: TextInputLayout
+    private lateinit var waPhoneNumberId: EditText
+    private lateinit var waAccessTokenLayout: TextInputLayout
+    private lateinit var waAccessToken: EditText
+    private lateinit var waRecipientLayout: TextInputLayout
+    private lateinit var waRecipient: EditText
+    private lateinit var waUseTemplate: MaterialSwitch
+    private lateinit var waTemplateName: EditText
+    private lateinit var waTemplateLanguage: EditText
+    private lateinit var waTemplateNameLayout: TextInputLayout
+    private lateinit var waTemplateLanguageLayout: TextInputLayout
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val persistSendersRunnable = Runnable { persistSenders() }
+    private val persistRegexesRunnable = Runnable { persistRegexes() }
+    private val persistWaRunnable = Runnable { persistWhatsAppConfig() }
+    private var pendingTemplateText: String = ""
+    private val persistTemplateRunnable = Runnable {
+        prefs.edit { putString("forwardTemplate", pendingTemplateText) }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_settings)
+
+        rootContainer = findViewById(R.id.rootContainer)
+        val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
+        setSupportActionBar(toolbar)
+        supportActionBar?.setDisplayHomeAsUpEnabled(true)
+        toolbar.setNavigationOnClickListener { finish() }
+
+        val contentScroll = findViewById<View>(R.id.contentScroll)
+        ViewCompat.setOnApplyWindowInsetsListener(contentScroll) { v, insets ->
+            val bars = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime()
+            )
+            v.updatePadding(left = bars.left, right = bars.right, bottom = bars.bottom)
+            insets
+        }
+
+        prefs = getSharedPreferences("mc_sms_fwd_wa", Context.MODE_PRIVATE)
+
+        waPhoneNumberIdLayout = findViewById(R.id.waPhoneNumberIdLayout)
+        waPhoneNumberId = findViewById(R.id.waPhoneNumberId)
+        waAccessTokenLayout = findViewById(R.id.waAccessTokenLayout)
+        waAccessToken = findViewById(R.id.waAccessToken)
+        waRecipientLayout = findViewById(R.id.waRecipientLayout)
+        waRecipient = findViewById(R.id.waRecipient)
+        waUseTemplate = findViewById(R.id.waUseTemplate)
+        waTemplateName = findViewById(R.id.waTemplateName)
+        waTemplateLanguage = findViewById(R.id.waTemplateLanguage)
+        waTemplateNameLayout = findViewById(R.id.waTemplateNameLayout)
+        waTemplateLanguageLayout = findViewById(R.id.waTemplateLanguageLayout)
+
+        val forwardTemplate = findViewById<EditText>(R.id.forwardTemplate)
+        val openTester = findViewById<MaterialButton>(R.id.openTester)
+        val addSenderButton = findViewById<MaterialButton>(R.id.addSenderButton)
+        val addRegexButton = findViewById<MaterialButton>(R.id.addRegexButton)
+        val sendTestButton = findViewById<MaterialButton>(R.id.sendTestButton)
+        sendersContainer = findViewById(R.id.sendersContainer)
+        regexesContainer = findViewById(R.id.regexesContainer)
+
+        waPhoneNumberId.setText(prefs.getString(WhatsAppConfig.KEY_PHONE_NUMBER_ID, ""))
+        waAccessToken.setText(prefs.getString(WhatsAppConfig.KEY_ACCESS_TOKEN, ""))
+        waRecipient.setText(prefs.getString(WhatsAppConfig.KEY_RECIPIENT, ""))
+        waTemplateName.setText(prefs.getString(WhatsAppConfig.KEY_TEMPLATE_NAME, ""))
+        waTemplateLanguage.setText(
+            prefs.getString(WhatsAppConfig.KEY_TEMPLATE_LANGUAGE, WhatsAppConfig.DEFAULT_TEMPLATE_LANGUAGE)
+        )
+        val useTemplateInitial = prefs.getBoolean(WhatsAppConfig.KEY_USE_TEMPLATE, true)
+        waUseTemplate.isChecked = useTemplateInitial
+        updateTemplateFieldsEnabled(useTemplateInitial)
+        validateRecipient(waRecipient.text?.toString().orEmpty())
+
+        val waPersistWatcher: (CharSequence?) -> Unit = { _ ->
+            mainHandler.removeCallbacks(persistWaRunnable)
+            mainHandler.postDelayed(persistWaRunnable, PERSIST_DEBOUNCE_MS)
+        }
+        waPhoneNumberId.addTextChangedListener { waPersistWatcher(it) }
+        waAccessToken.addTextChangedListener { waPersistWatcher(it) }
+        waRecipient.addTextChangedListener {
+            validateRecipient(it?.toString().orEmpty())
+            waPersistWatcher(it)
+        }
+        waTemplateName.addTextChangedListener { waPersistWatcher(it) }
+        waTemplateLanguage.addTextChangedListener { waPersistWatcher(it) }
+        waUseTemplate.setOnCheckedChangeListener { _, checked ->
+            updateTemplateFieldsEnabled(checked)
+            mainHandler.removeCallbacks(persistWaRunnable)
+            mainHandler.postDelayed(persistWaRunnable, PERSIST_DEBOUNCE_MS)
+        }
+
+        forwardTemplate.setText(prefs.getString("forwardTemplate", ""))
+        forwardTemplate.addTextChangedListener { text ->
+            pendingTemplateText = text?.toString().orEmpty()
+            mainHandler.removeCallbacks(persistTemplateRunnable)
+            mainHandler.postDelayed(persistTemplateRunnable, PERSIST_DEBOUNCE_MS)
+        }
+
+        SenderListStore.load(prefs).forEach { addSenderRow(it) }
+        RegexListStore.load(prefs).forEach { addRegexRow(it) }
+
+        addSenderButton.setOnClickListener {
+            val row = addSenderRow("")
+            row.findViewById<EditText>(R.id.senderEntry).requestFocus()
+        }
+
+        addRegexButton.setOnClickListener {
+            val row = addRegexRow("")
+            row.findViewById<EditText>(R.id.regexEntry).requestFocus()
+        }
+
+        openTester.setOnClickListener {
+            startActivity(Intent(this, RegexTesterActivity::class.java))
+        }
+
+        sendTestButton.setOnClickListener {
+            flushPendingWrites()
+            sendWhatsAppTestMessage()
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Flush any pending debounced writes so leaving the screen never loses input.
+        flushPendingWrites()
+    }
+
+    private fun flushPendingWrites() {
+        listOf(
+            persistSendersRunnable,
+            persistRegexesRunnable,
+            persistWaRunnable,
+            persistTemplateRunnable,
+        ).forEach {
+            mainHandler.removeCallbacks(it)
+            it.run()
+        }
+    }
+
+    private fun persistWhatsAppConfig() {
+        prefs.edit {
+            putString(WhatsAppConfig.KEY_PHONE_NUMBER_ID, waPhoneNumberId.text?.toString()?.trim().orEmpty())
+            putString(WhatsAppConfig.KEY_ACCESS_TOKEN, waAccessToken.text?.toString()?.trim().orEmpty())
+            putString(WhatsAppConfig.KEY_RECIPIENT, waRecipient.text?.toString()?.trim().orEmpty())
+            putBoolean(WhatsAppConfig.KEY_USE_TEMPLATE, waUseTemplate.isChecked)
+            putString(WhatsAppConfig.KEY_TEMPLATE_NAME, waTemplateName.text?.toString()?.trim().orEmpty())
+            putString(
+                WhatsAppConfig.KEY_TEMPLATE_LANGUAGE,
+                waTemplateLanguage.text?.toString()?.trim()
+                    ?.ifEmpty { WhatsAppConfig.DEFAULT_TEMPLATE_LANGUAGE }
+                    ?: WhatsAppConfig.DEFAULT_TEMPLATE_LANGUAGE
+            )
+        }
+    }
+
+    private fun updateTemplateFieldsEnabled(enabled: Boolean) {
+        waTemplateNameLayout.isEnabled = enabled
+        waTemplateLanguageLayout.isEnabled = enabled
+        waTemplateName.isEnabled = enabled
+        waTemplateLanguage.isEnabled = enabled
+    }
+
+    private fun validateRecipient(text: String) {
+        waRecipientLayout.error = when {
+            text.isEmpty() -> null
+            !PhoneNumberUtils.isWellFormedSmsAddress(text) ->
+                "Doesn't look like an E.164 number"
+            else -> null
+        }
+    }
+
+    private fun sendWhatsAppTestMessage() {
+        val config = WhatsAppConfig.load(prefs)
+        if (!config.hasCredentials) {
+            Snackbar.make(
+                rootContainer,
+                "Set Phone Number ID, access token, and recipient first.",
+                Snackbar.LENGTH_LONG
+            ).show()
+            return
+        }
+        if (config.useTemplate && (config.templateName.isBlank() || config.templateLanguage.isBlank())) {
+            Snackbar.make(
+                rootContainer,
+                "Template name and language are required when 'Use template' is on.",
+                Snackbar.LENGTH_LONG
+            ).show()
+            return
+        }
+        val body = "MC SMS\u2192WhatsApp Test \u2014 manual test send at ${System.currentTimeMillis()}"
+        LogUtils.addToLog(
+            this,
+            "REAL SEND \u2192 To: ${config.recipient} | Msg: $body (manual test)"
+        )
+        WhatsAppCloudChannel.send(this, config, body)
+        Snackbar.make(rootContainer, "Sending test message\u2026 see Activity log.", Snackbar.LENGTH_SHORT).show()
+    }
+
+    private fun addSenderRow(initialValue: String): View {
+        val row = LayoutInflater.from(this).inflate(R.layout.item_sender, sendersContainer, false)
+        val entry = row.findViewById<EditText>(R.id.senderEntry)
+        val delete = row.findViewById<MaterialButton>(R.id.deleteSender)
+        val moveUp = row.findViewById<MaterialButton>(R.id.moveUpSender)
+        val moveDown = row.findViewById<MaterialButton>(R.id.moveDownSender)
+
+        entry.setText(initialValue)
+        // All rows share R.id.senderEntry, so view-state restore would copy the
+        // last-focused row's text onto every row on activity recreation.
+        entry.isSaveEnabled = false
+        entry.addTextChangedListener { schedulePersistSenders() }
+
+        delete.setOnClickListener {
+            sendersContainer.removeView(row)
+            schedulePersistSenders()
+        }
+        moveUp.setOnClickListener {
+            moveRow(sendersContainer, row, -1)
+            schedulePersistSenders()
+        }
+        moveDown.setOnClickListener {
+            moveRow(sendersContainer, row, +1)
+            schedulePersistSenders()
+        }
+
+        sendersContainer.addView(row)
+        return row
+    }
+
+    private fun schedulePersistSenders() {
+        mainHandler.removeCallbacks(persistSendersRunnable)
+        mainHandler.postDelayed(persistSendersRunnable, PERSIST_DEBOUNCE_MS)
+    }
+
+    private fun persistSenders() {
+        val list = (0 until sendersContainer.childCount).map { i ->
+            sendersContainer.getChildAt(i)
+                .findViewById<EditText>(R.id.senderEntry).text?.toString().orEmpty()
+        }
+        SenderListStore.save(prefs, list)
+    }
+
+    private fun addRegexRow(initialValue: String): View {
+        val row = LayoutInflater.from(this).inflate(R.layout.item_regex, regexesContainer, false)
+        val entry = row.findViewById<EditText>(R.id.regexEntry)
+        val layout = row.findViewById<TextInputLayout>(R.id.regexEntryLayout)
+        val delete = row.findViewById<MaterialButton>(R.id.deleteRegex)
+        val moveUp = row.findViewById<MaterialButton>(R.id.moveUpRegex)
+        val moveDown = row.findViewById<MaterialButton>(R.id.moveDownRegex)
+
+        entry.setText(initialValue)
+        entry.isSaveEnabled = false
+        validateRegex(layout, initialValue)
+        entry.addTextChangedListener { text ->
+            validateRegex(layout, text?.toString().orEmpty())
+            schedulePersistRegexes()
+        }
+
+        delete.setOnClickListener {
+            regexesContainer.removeView(row)
+            schedulePersistRegexes()
+        }
+        moveUp.setOnClickListener {
+            moveRow(regexesContainer, row, -1)
+            schedulePersistRegexes()
+        }
+        moveDown.setOnClickListener {
+            moveRow(regexesContainer, row, +1)
+            schedulePersistRegexes()
+        }
+
+        regexesContainer.addView(row)
+        return row
+    }
+
+    private fun validateRegex(layout: TextInputLayout, pattern: String) {
+        layout.error = when {
+            pattern.isBlank() -> null
+            else -> runCatching { Regex(pattern) }.exceptionOrNull()
+                ?.let { "Invalid regex: ${it.message}" }
+        }
+    }
+
+    private fun schedulePersistRegexes() {
+        mainHandler.removeCallbacks(persistRegexesRunnable)
+        mainHandler.postDelayed(persistRegexesRunnable, PERSIST_DEBOUNCE_MS)
+    }
+
+    private fun persistRegexes() {
+        val list = (0 until regexesContainer.childCount).map { i ->
+            regexesContainer.getChildAt(i)
+                .findViewById<EditText>(R.id.regexEntry).text?.toString().orEmpty()
+        }
+        RegexListStore.save(prefs, list)
+    }
+
+    private fun moveRow(container: LinearLayout, row: View, delta: Int) {
+        val index = container.indexOfChild(row)
+        val target = index + delta
+        if (index < 0 || target < 0 || target >= container.childCount) return
+        container.removeViewAt(index)
+        container.addView(row, target)
+    }
+
+    companion object {
+        // 150ms swallows the bursts during typing while still feeling instant on save.
+        private const val PERSIST_DEBOUNCE_MS = 150L
+    }
+}

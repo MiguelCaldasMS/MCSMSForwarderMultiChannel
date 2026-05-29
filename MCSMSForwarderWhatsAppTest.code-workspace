@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"chat.tools.terminal.autoApprove": {
+			".\\gradlew.bat": true,
+			"gh": true,
+			"Test-Path": true,
+			"git config": true,
+			"git init": true,
+			"git add": true
+		}
+	}
+}

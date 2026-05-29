@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MC SMS→WhatsApp Test</string>
+    <string name="tile_label">SMS→WhatsApp</string>
+    <string name="tile_state_on">Forwarding on</string>
+    <string name="tile_state_off">Forwarding off</string>
+</resources>

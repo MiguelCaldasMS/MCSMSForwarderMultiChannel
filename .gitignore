@@ -1,0 +1,20 @@
+# IDE files
+.idea/
+.DS_Store
+
+# Build files
+build/
+.gradle/
+.kotlin/
+local.properties
+
+# Captures and logs
+captures/
+*.log
+
+# Keystore files
+*.jks
+*.keystore
+
+# Test-script artifacts
+/ui.xml
