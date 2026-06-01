@@ -4,14 +4,19 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
+import com.miguelcaldas.mcsmsforwarderwhatsapp.util.ForwardStatsStore
 import com.miguelcaldas.mcsmsforwarderwhatsapp.util.ForwardTemplate
 import com.miguelcaldas.mcsmsforwarderwhatsapp.util.LogUtils
 import com.miguelcaldas.mcsmsforwarderwhatsapp.util.RegexListStore
 import com.miguelcaldas.mcsmsforwarderwhatsapp.util.SenderListStore
 import com.miguelcaldas.mcsmsforwarderwhatsapp.util.SenderMatcher
+import com.miguelcaldas.mcsmsforwarderwhatsapp.util.TelegramChannel
+import com.miguelcaldas.mcsmsforwarderwhatsapp.util.TelegramConfig
 import com.miguelcaldas.mcsmsforwarderwhatsapp.util.TextNormalizer
 import com.miguelcaldas.mcsmsforwarderwhatsapp.util.WhatsAppCloudChannel
 import com.miguelcaldas.mcsmsforwarderwhatsapp.util.WhatsAppConfig
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 class SmsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -23,9 +28,9 @@ class SmsReceiver : BroadcastReceiver() {
         if (!prefs.getBoolean("master_enabled", true)) return
 
         val waConfig = WhatsAppConfig.load(prefs)
-        // Without credentials/recipient there is nowhere to forward; bail before reading
-        // anything else or doing any normalization / matching work.
-        if (!waConfig.hasCredentials) return
+        val tgConfig = TelegramConfig.load(prefs)
+        // Bail before any other work if neither outbound channel is enabled+configured.
+        if (!waConfig.isOperational && !tgConfig.isOperational) return
 
         val allowedSenders = SenderListStore.load(prefs)
         if (allowedSenders.isEmpty()) return
@@ -64,15 +69,35 @@ class SmsReceiver : BroadcastReceiver() {
             else ForwardTemplate.apply(forwardTemplate, sender, messages[0].timestampMillis, fullBody)
 
         // Network I/O must outlive onReceive returning, so hand the receiver off to
-        // goAsync() and let WhatsAppCloudChannel call finish() when the HTTP exchange
-        // completes (success, error, or timeout).
+        // goAsync() and let each channel report completion. The forward stat is
+        // incremented at most once per SMS, regardless of how many channels succeeded.
         val pending = goAsync()
-        LogUtils.addToLog(
-            context,
-            "REAL SEND → To: ${waConfig.recipient} | Msg: $outgoingBody"
-        )
-        WhatsAppCloudChannel.send(context, waConfig, outgoingBody) {
-            pending.finish()
+        val app = context.applicationContext
+        val sendViaWa = waConfig.isOperational
+        val sendViaTg = tgConfig.isOperational
+        val remaining = AtomicInteger((if (sendViaWa) 1 else 0) + (if (sendViaTg) 1 else 0))
+        val anySuccess = AtomicBoolean(false)
+        val onChannelDone: (Boolean) -> Unit = { success ->
+            if (success) anySuccess.set(true)
+            if (remaining.decrementAndGet() == 0) {
+                if (anySuccess.get()) ForwardStatsStore.recordForward(app)
+                pending.finish()
+            }
+        }
+
+        if (sendViaWa) {
+            LogUtils.addToLog(
+                context,
+                "REAL SEND [WhatsApp] \u2192 To: ${waConfig.recipient} | Msg: $outgoingBody"
+            )
+            WhatsAppCloudChannel.send(context, waConfig, outgoingBody, onChannelDone)
+        }
+        if (sendViaTg) {
+            LogUtils.addToLog(
+                context,
+                "REAL SEND [Telegram] \u2192 To: chat ${tgConfig.chatId} | Msg: $outgoingBody"
+            )
+            TelegramChannel.send(context, tgConfig, outgoingBody, onChannelDone)
         }
     }
 }

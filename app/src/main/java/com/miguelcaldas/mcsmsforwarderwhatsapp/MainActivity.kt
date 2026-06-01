@@ -32,6 +32,7 @@ import com.google.android.material.snackbar.Snackbar
 import com.miguelcaldas.mcsmsforwarderwhatsapp.util.ForwardStatsStore
 import com.miguelcaldas.mcsmsforwarderwhatsapp.util.RegexListStore
 import com.miguelcaldas.mcsmsforwarderwhatsapp.util.SenderListStore
+import com.miguelcaldas.mcsmsforwarderwhatsapp.util.TelegramConfig
 import com.miguelcaldas.mcsmsforwarderwhatsapp.util.WhatsAppConfig
 import java.text.DateFormat
 import java.util.Date
@@ -128,7 +129,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateMasterSubtitle(enabled: Boolean) {
         masterSwitchSubtitle.text = if (enabled)
-            "Matching messages from allowed senders are forwarded to WhatsApp."
+            "Matching messages from allowed senders are forwarded to the enabled channels."
         else
             "Paused. Incoming SMS will be ignored."
     }
@@ -188,28 +189,51 @@ class MainActivity : AppCompatActivity() {
         )
 
         val waConfig = WhatsAppConfig.load(prefs)
+        val tgConfig = TelegramConfig.load(prefs)
         addReadinessRow(
-            "WhatsApp Phone Number ID set",
-            waConfig.phoneNumberId.isNotEmpty(),
+            "At least one channel enabled",
+            waConfig.enabled || tgConfig.enabled,
             fixLabel = "Open",
             onFix = { startActivity(Intent(this, SettingsActivity::class.java)) }
         )
-        addReadinessRow(
-            "WhatsApp access token set",
-            waConfig.accessToken.isNotEmpty(),
-            fixLabel = "Open",
-            onFix = { startActivity(Intent(this, SettingsActivity::class.java)) }
-        )
-        addReadinessRow(
-            "Recipient set (E.164)",
-            waConfig.recipient.isNotEmpty(),
-            fixLabel = "Open",
-            onFix = { startActivity(Intent(this, SettingsActivity::class.java)) }
-        )
-        if (waConfig.useTemplate) {
+        if (waConfig.enabled) {
             addReadinessRow(
-                "Template configured",
-                waConfig.templateName.isNotBlank() && waConfig.templateLanguage.isNotBlank(),
+                "WhatsApp Phone Number ID set",
+                waConfig.phoneNumberId.isNotEmpty(),
+                fixLabel = "Open",
+                onFix = { startActivity(Intent(this, SettingsActivity::class.java)) }
+            )
+            addReadinessRow(
+                "WhatsApp access token set",
+                waConfig.accessToken.isNotEmpty(),
+                fixLabel = "Open",
+                onFix = { startActivity(Intent(this, SettingsActivity::class.java)) }
+            )
+            addReadinessRow(
+                "WhatsApp recipient set (E.164)",
+                waConfig.recipient.isNotEmpty(),
+                fixLabel = "Open",
+                onFix = { startActivity(Intent(this, SettingsActivity::class.java)) }
+            )
+            if (waConfig.useTemplate) {
+                addReadinessRow(
+                    "WhatsApp template configured",
+                    waConfig.templateName.isNotBlank() && waConfig.templateLanguage.isNotBlank(),
+                    fixLabel = "Open",
+                    onFix = { startActivity(Intent(this, SettingsActivity::class.java)) }
+                )
+            }
+        }
+        if (tgConfig.enabled) {
+            addReadinessRow(
+                "Telegram bot token set",
+                tgConfig.botToken.isNotEmpty(),
+                fixLabel = "Open",
+                onFix = { startActivity(Intent(this, SettingsActivity::class.java)) }
+            )
+            addReadinessRow(
+                "Telegram chat ID set",
+                tgConfig.chatId.isNotEmpty(),
                 fixLabel = "Open",
                 onFix = { startActivity(Intent(this, SettingsActivity::class.java)) }
             )

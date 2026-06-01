@@ -1,0 +1,123 @@
+package com.miguelcaldas.mcsmsforwarderwhatsapp.util
+
+import android.content.Context
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
+import java.util.concurrent.Executors
+
+/**
+ * Posts forwarded SMS bodies to the Telegram Bot API on a single background
+ * thread so SmsReceiver can finish its onReceive promptly.
+ *
+ * Success is signalled to the caller via `onComplete(true|false)` so the
+ * receiver can decide whether to record a forward stat. The bot token is
+ * URL-encoded out of paranoia and never appears in log entries — only the
+ * HTTP status code and (if present) Telegram's `description` field.
+ */
+object TelegramChannel {
+    private const val API_BASE = "https://api.telegram.org"
+    private const val CONNECT_TIMEOUT_MS = 10_000
+    private const val READ_TIMEOUT_MS = 20_000
+
+    private val sendExecutor = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "tg-sender").apply { isDaemon = true }
+    }
+
+    fun send(
+        context: Context,
+        config: TelegramConfig,
+        body: String,
+        onComplete: (Boolean) -> Unit = {},
+    ) {
+        val app = context.applicationContext
+        if (!config.hasCredentials) {
+            LogUtils.addToLog(app, "SEND FAILED [Telegram] → missing config")
+            onComplete(false)
+            return
+        }
+        sendExecutor.execute {
+            var success = false
+            try {
+                val outcome = runCatching { postSync(config, body) }
+                val result = outcome.getOrNull()
+                when {
+                    result != null && result.success -> {
+                        success = true
+                        LogUtils.addToLog(
+                            app,
+                            "SEND OK [Telegram] → chat ${config.chatId} (HTTP ${result.statusCode})"
+                        )
+                    }
+                    result != null -> {
+                        val detail = result.errorSummary?.takeIf { it.isNotBlank() }?.let { " $it" }.orEmpty()
+                        LogUtils.addToLog(
+                            app,
+                            "SEND FAILED [Telegram] → chat ${config.chatId} (HTTP ${result.statusCode})$detail"
+                        )
+                    }
+                    else -> {
+                        val msg = outcome.exceptionOrNull()?.message.orEmpty()
+                        LogUtils.addToLog(
+                            app,
+                            "SEND FAILED [Telegram] → chat ${config.chatId} (transport) $msg".trimEnd()
+                        )
+                    }
+                }
+            } finally {
+                onComplete(success)
+            }
+        }
+    }
+
+    private data class Outcome(val statusCode: Int, val success: Boolean, val errorSummary: String?)
+
+    private fun postSync(config: TelegramConfig, body: String): Outcome {
+        // Bot tokens are of the form `{bot_id}:{secret}`; URL-encode just in case the
+        // user accidentally pastes a token with stray padding characters.
+        val encodedToken = URLEncoder.encode(config.botToken, "UTF-8")
+        val url = URL("$API_BASE/bot$encodedToken/sendMessage")
+        val payload = JSONObject()
+            .put("chat_id", config.chatId)
+            .put("text", body)
+            .put("disable_web_page_preview", true)
+            .toString()
+            .toByteArray(Charsets.UTF_8)
+        val conn = (url.openConnection() as HttpURLConnection)
+        try {
+            conn.requestMethod = "POST"
+            conn.connectTimeout = CONNECT_TIMEOUT_MS
+            conn.readTimeout = READ_TIMEOUT_MS
+            conn.doOutput = true
+            conn.useCaches = false
+            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+            conn.setRequestProperty("Accept", "application/json")
+            conn.setFixedLengthStreamingMode(payload.size)
+            conn.outputStream.use { it.write(payload) }
+            val code = conn.responseCode
+            val success = code in 200..299
+            val summary = if (success) null else {
+                val stream = conn.errorStream ?: conn.inputStream
+                val raw = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+                summarizeError(raw)
+            }
+            return Outcome(code, success, summary)
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    private fun summarizeError(raw: String): String {
+        if (raw.isBlank()) return ""
+        return runCatching {
+            val obj = JSONObject(raw)
+            val code = obj.optInt("error_code", -1)
+            val desc = obj.optString("description")
+            buildString {
+                if (code != -1) append("code=").append(code).append(' ')
+                if (desc.isNotEmpty()) append("desc=").append(desc)
+            }.trim().take(240)
+        }.getOrElse { raw.take(180) }
+    }
+}

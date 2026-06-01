@@ -26,6 +26,8 @@ import com.google.android.material.textfield.TextInputLayout
 import com.miguelcaldas.mcsmsforwarderwhatsapp.util.LogUtils
 import com.miguelcaldas.mcsmsforwarderwhatsapp.util.RegexListStore
 import com.miguelcaldas.mcsmsforwarderwhatsapp.util.SenderListStore
+import com.miguelcaldas.mcsmsforwarderwhatsapp.util.TelegramChannel
+import com.miguelcaldas.mcsmsforwarderwhatsapp.util.TelegramConfig
 import com.miguelcaldas.mcsmsforwarderwhatsapp.util.WhatsAppCloudChannel
 import com.miguelcaldas.mcsmsforwarderwhatsapp.util.WhatsAppConfig
 
@@ -36,6 +38,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var sendersContainer: LinearLayout
     private lateinit var regexesContainer: LinearLayout
 
+    private lateinit var waEnabled: MaterialSwitch
     private lateinit var waPhoneNumberIdLayout: TextInputLayout
     private lateinit var waPhoneNumberId: EditText
     private lateinit var waAccessTokenLayout: TextInputLayout
@@ -48,10 +51,15 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var waTemplateNameLayout: TextInputLayout
     private lateinit var waTemplateLanguageLayout: TextInputLayout
 
+    private lateinit var tgEnabled: MaterialSwitch
+    private lateinit var tgBotToken: EditText
+    private lateinit var tgChatId: EditText
+
     private val mainHandler = Handler(Looper.getMainLooper())
     private val persistSendersRunnable = Runnable { persistSenders() }
     private val persistRegexesRunnable = Runnable { persistRegexes() }
     private val persistWaRunnable = Runnable { persistWhatsAppConfig() }
+    private val persistTgRunnable = Runnable { persistTelegramConfig() }
     private var pendingTemplateText: String = ""
     private val persistTemplateRunnable = Runnable {
         prefs.edit { putString("forwardTemplate", pendingTemplateText) }
@@ -79,6 +87,7 @@ class SettingsActivity : AppCompatActivity() {
 
         prefs = getSharedPreferences("mc_sms_fwd_wa", Context.MODE_PRIVATE)
 
+        waEnabled = findViewById(R.id.waEnabled)
         waPhoneNumberIdLayout = findViewById(R.id.waPhoneNumberIdLayout)
         waPhoneNumberId = findViewById(R.id.waPhoneNumberId)
         waAccessTokenLayout = findViewById(R.id.waAccessTokenLayout)
@@ -91,14 +100,20 @@ class SettingsActivity : AppCompatActivity() {
         waTemplateNameLayout = findViewById(R.id.waTemplateNameLayout)
         waTemplateLanguageLayout = findViewById(R.id.waTemplateLanguageLayout)
 
+        tgEnabled = findViewById(R.id.tgEnabled)
+        tgBotToken = findViewById(R.id.tgBotToken)
+        tgChatId = findViewById(R.id.tgChatId)
+
         val forwardTemplate = findViewById<EditText>(R.id.forwardTemplate)
         val openTester = findViewById<MaterialButton>(R.id.openTester)
         val addSenderButton = findViewById<MaterialButton>(R.id.addSenderButton)
         val addRegexButton = findViewById<MaterialButton>(R.id.addRegexButton)
         val sendTestButton = findViewById<MaterialButton>(R.id.sendTestButton)
+        val sendTgTestButton = findViewById<MaterialButton>(R.id.sendTgTestButton)
         sendersContainer = findViewById(R.id.sendersContainer)
         regexesContainer = findViewById(R.id.regexesContainer)
 
+        waEnabled.isChecked = prefs.getBoolean(WhatsAppConfig.KEY_ENABLED, true)
         waPhoneNumberId.setText(prefs.getString(WhatsAppConfig.KEY_PHONE_NUMBER_ID, ""))
         waAccessToken.setText(prefs.getString(WhatsAppConfig.KEY_ACCESS_TOKEN, ""))
         waRecipient.setText(prefs.getString(WhatsAppConfig.KEY_RECIPIENT, ""))
@@ -123,10 +138,29 @@ class SettingsActivity : AppCompatActivity() {
         }
         waTemplateName.addTextChangedListener { waPersistWatcher(it) }
         waTemplateLanguage.addTextChangedListener { waPersistWatcher(it) }
+        waEnabled.setOnCheckedChangeListener { _, _ ->
+            mainHandler.removeCallbacks(persistWaRunnable)
+            mainHandler.postDelayed(persistWaRunnable, PERSIST_DEBOUNCE_MS)
+        }
         waUseTemplate.setOnCheckedChangeListener { _, checked ->
             updateTemplateFieldsEnabled(checked)
             mainHandler.removeCallbacks(persistWaRunnable)
             mainHandler.postDelayed(persistWaRunnable, PERSIST_DEBOUNCE_MS)
+        }
+
+        val tgConfig = TelegramConfig.load(prefs)
+        tgEnabled.isChecked = tgConfig.enabled
+        tgBotToken.setText(tgConfig.botToken)
+        tgChatId.setText(tgConfig.chatId)
+        val tgPersistWatcher: (CharSequence?) -> Unit = { _ ->
+            mainHandler.removeCallbacks(persistTgRunnable)
+            mainHandler.postDelayed(persistTgRunnable, PERSIST_DEBOUNCE_MS)
+        }
+        tgBotToken.addTextChangedListener { tgPersistWatcher(it) }
+        tgChatId.addTextChangedListener { tgPersistWatcher(it) }
+        tgEnabled.setOnCheckedChangeListener { _, _ ->
+            mainHandler.removeCallbacks(persistTgRunnable)
+            mainHandler.postDelayed(persistTgRunnable, PERSIST_DEBOUNCE_MS)
         }
 
         forwardTemplate.setText(prefs.getString("forwardTemplate", ""))
@@ -157,6 +191,10 @@ class SettingsActivity : AppCompatActivity() {
             flushPendingWrites()
             sendWhatsAppTestMessage()
         }
+        sendTgTestButton.setOnClickListener {
+            flushPendingWrites()
+            sendTelegramTestMessage()
+        }
     }
 
     override fun onPause() {
@@ -170,6 +208,7 @@ class SettingsActivity : AppCompatActivity() {
             persistSendersRunnable,
             persistRegexesRunnable,
             persistWaRunnable,
+            persistTgRunnable,
             persistTemplateRunnable,
         ).forEach {
             mainHandler.removeCallbacks(it)
@@ -179,6 +218,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun persistWhatsAppConfig() {
         prefs.edit {
+            putBoolean(WhatsAppConfig.KEY_ENABLED, waEnabled.isChecked)
             putString(WhatsAppConfig.KEY_PHONE_NUMBER_ID, waPhoneNumberId.text?.toString()?.trim().orEmpty())
             putString(WhatsAppConfig.KEY_ACCESS_TOKEN, waAccessToken.text?.toString()?.trim().orEmpty())
             putString(WhatsAppConfig.KEY_RECIPIENT, waRecipient.text?.toString()?.trim().orEmpty())
@@ -190,6 +230,14 @@ class SettingsActivity : AppCompatActivity() {
                     ?.ifEmpty { WhatsAppConfig.DEFAULT_TEMPLATE_LANGUAGE }
                     ?: WhatsAppConfig.DEFAULT_TEMPLATE_LANGUAGE
             )
+        }
+    }
+
+    private fun persistTelegramConfig() {
+        prefs.edit {
+            putBoolean(TelegramConfig.KEY_ENABLED, tgEnabled.isChecked)
+            putString(TelegramConfig.KEY_BOT_TOKEN, tgBotToken.text?.toString()?.trim().orEmpty())
+            putString(TelegramConfig.KEY_CHAT_ID, tgChatId.text?.toString()?.trim().orEmpty())
         }
     }
 
@@ -234,6 +282,25 @@ class SettingsActivity : AppCompatActivity() {
         )
         WhatsAppCloudChannel.send(this, config, body)
         Snackbar.make(rootContainer, "Sending test message\u2026 see Activity log.", Snackbar.LENGTH_SHORT).show()
+    }
+
+    private fun sendTelegramTestMessage() {
+        val config = TelegramConfig.load(prefs)
+        if (!config.hasCredentials) {
+            Snackbar.make(
+                rootContainer,
+                "Set bot token and chat ID first.",
+                Snackbar.LENGTH_LONG
+            ).show()
+            return
+        }
+        val body = "MC SMS\u2192Telegram Test \u2014 manual test send at ${System.currentTimeMillis()}"
+        LogUtils.addToLog(
+            this,
+            "REAL SEND [Telegram] \u2192 To: chat ${config.chatId} | Msg: $body (manual test)"
+        )
+        TelegramChannel.send(this, config, body)
+        Snackbar.make(rootContainer, "Sending Telegram test\u2026 see Activity log.", Snackbar.LENGTH_SHORT).show()
     }
 
     private fun addSenderRow(initialValue: String): View {

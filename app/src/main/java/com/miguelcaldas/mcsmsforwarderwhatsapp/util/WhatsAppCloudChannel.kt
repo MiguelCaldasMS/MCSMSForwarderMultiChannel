@@ -31,43 +31,44 @@ object WhatsAppCloudChannel {
         context: Context,
         config: WhatsAppConfig,
         body: String,
-        onComplete: () -> Unit = {},
+        onComplete: (Boolean) -> Unit = {},
     ) {
         val app = context.applicationContext
         if (!config.hasCredentials) {
-            LogUtils.addToLog(app, "SEND FAILED → missing WhatsApp config")
-            onComplete()
+            LogUtils.addToLog(app, "SEND FAILED [WhatsApp] → missing config")
+            onComplete(false)
             return
         }
         sendExecutor.execute {
+            var success = false
             try {
                 val outcome = runCatching { postSync(config, body) }
                 val result = outcome.getOrNull()
                 when {
                     result != null && result.success -> {
-                        ForwardStatsStore.recordForward(app)
+                        success = true
                         LogUtils.addToLog(
                             app,
-                            "SEND OK → ${config.recipient} (HTTP ${result.statusCode})"
+                            "SEND OK [WhatsApp] → ${config.recipient} (HTTP ${result.statusCode})"
                         )
                     }
                     result != null -> {
                         val detail = result.errorSummary?.takeIf { it.isNotBlank() }?.let { " $it" }.orEmpty()
                         LogUtils.addToLog(
                             app,
-                            "SEND FAILED → ${config.recipient} (HTTP ${result.statusCode})$detail"
+                            "SEND FAILED [WhatsApp] → ${config.recipient} (HTTP ${result.statusCode})$detail"
                         )
                     }
                     else -> {
                         val msg = outcome.exceptionOrNull()?.message.orEmpty()
                         LogUtils.addToLog(
                             app,
-                            "SEND FAILED → ${config.recipient} (transport) $msg".trimEnd()
+                            "SEND FAILED [WhatsApp] → ${config.recipient} (transport) $msg".trimEnd()
                         )
                     }
                 }
             } finally {
-                onComplete()
+                onComplete(success)
             }
         }
     }

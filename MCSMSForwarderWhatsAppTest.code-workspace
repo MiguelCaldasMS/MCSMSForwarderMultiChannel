@@ -11,7 +11,9 @@
 			"Test-Path": true,
 			"git config": true,
 			"git init": true,
-			"git add": true
+			"git add": true,
+			"git commit": true,
+			"git remote": true
 		}
 	}
 }

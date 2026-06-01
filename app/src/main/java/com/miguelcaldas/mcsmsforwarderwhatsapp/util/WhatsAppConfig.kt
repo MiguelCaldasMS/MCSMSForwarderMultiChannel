@@ -8,6 +8,7 @@ import android.content.SharedPreferences
  * receiver / settings UI can pass an immutable value around.
  */
 data class WhatsAppConfig(
+    val enabled: Boolean,
     val phoneNumberId: String,
     val accessToken: String,
     val recipient: String,
@@ -22,7 +23,11 @@ data class WhatsAppConfig(
         get() = hasCredentials &&
             (!useTemplate || (templateName.isNotBlank() && templateLanguage.isNotBlank()))
 
+    val isOperational: Boolean
+        get() = enabled && isComplete
+
     companion object {
+        const val KEY_ENABLED = "waEnabled"
         const val KEY_PHONE_NUMBER_ID = "waPhoneNumberId"
         const val KEY_ACCESS_TOKEN = "waAccessToken"
         const val KEY_RECIPIENT = "waRecipient"
@@ -33,6 +38,8 @@ data class WhatsAppConfig(
         const val DEFAULT_TEMPLATE_LANGUAGE = "en_US"
 
         fun load(prefs: SharedPreferences): WhatsAppConfig = WhatsAppConfig(
+            // Default true so existing installs keep forwarding to WhatsApp after upgrade.
+            enabled = prefs.getBoolean(KEY_ENABLED, true),
             phoneNumberId = prefs.getString(KEY_PHONE_NUMBER_ID, "").orEmpty().trim(),
             accessToken = prefs.getString(KEY_ACCESS_TOKEN, "").orEmpty().trim(),
             recipient = prefs.getString(KEY_RECIPIENT, "").orEmpty().trim(),
