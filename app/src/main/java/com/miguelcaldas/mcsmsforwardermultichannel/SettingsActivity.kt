@@ -26,6 +26,9 @@ import com.google.android.material.textfield.TextInputLayout
 import com.miguelcaldas.mcsmsforwardermultichannel.util.LogUtils
 import com.miguelcaldas.mcsmsforwardermultichannel.util.RegexListStore
 import com.miguelcaldas.mcsmsforwardermultichannel.util.SenderListStore
+import com.miguelcaldas.mcsmsforwardermultichannel.util.SenderMatcher
+import com.miguelcaldas.mcsmsforwardermultichannel.util.SmsConfig
+import com.miguelcaldas.mcsmsforwardermultichannel.util.SmsForwardChannel
 import com.miguelcaldas.mcsmsforwardermultichannel.util.TelegramChannel
 import com.miguelcaldas.mcsmsforwardermultichannel.util.TelegramConfig
 import com.miguelcaldas.mcsmsforwardermultichannel.util.WhatsAppCloudChannel
@@ -55,11 +58,16 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var tgBotToken: EditText
     private lateinit var tgChatId: EditText
 
+    private lateinit var smsEnabled: MaterialSwitch
+    private lateinit var smsDestinationLayout: TextInputLayout
+    private lateinit var smsDestination: EditText
+
     private val mainHandler = Handler(Looper.getMainLooper())
     private val persistSendersRunnable = Runnable { persistSenders() }
     private val persistRegexesRunnable = Runnable { persistRegexes() }
     private val persistWaRunnable = Runnable { persistWhatsAppConfig() }
     private val persistTgRunnable = Runnable { persistTelegramConfig() }
+    private val persistSmsRunnable = Runnable { persistSmsConfig() }
     private var pendingTemplateText: String = ""
     private val persistTemplateRunnable = Runnable {
         prefs.edit { putString("forwardTemplate", pendingTemplateText) }
@@ -104,12 +112,17 @@ class SettingsActivity : AppCompatActivity() {
         tgBotToken = findViewById(R.id.tgBotToken)
         tgChatId = findViewById(R.id.tgChatId)
 
+        smsEnabled = findViewById(R.id.smsEnabled)
+        smsDestinationLayout = findViewById(R.id.smsDestinationLayout)
+        smsDestination = findViewById(R.id.smsDestination)
+
         val forwardTemplate = findViewById<EditText>(R.id.forwardTemplate)
         val openTester = findViewById<MaterialButton>(R.id.openTester)
         val addSenderButton = findViewById<MaterialButton>(R.id.addSenderButton)
         val addRegexButton = findViewById<MaterialButton>(R.id.addRegexButton)
         val sendTestButton = findViewById<MaterialButton>(R.id.sendTestButton)
         val sendTgTestButton = findViewById<MaterialButton>(R.id.sendTgTestButton)
+        val sendSmsTestButton = findViewById<MaterialButton>(R.id.sendSmsTestButton)
         sendersContainer = findViewById(R.id.sendersContainer)
         regexesContainer = findViewById(R.id.regexesContainer)
 
@@ -163,6 +176,23 @@ class SettingsActivity : AppCompatActivity() {
             mainHandler.postDelayed(persistTgRunnable, PERSIST_DEBOUNCE_MS)
         }
 
+        val smsConfig = SmsConfig.load(prefs)
+        smsEnabled.isChecked = smsConfig.enabled
+        smsDestination.setText(smsConfig.destination)
+        validateSmsDestination(smsConfig.destination)
+        val smsPersistWatcher: (CharSequence?) -> Unit = { _ ->
+            mainHandler.removeCallbacks(persistSmsRunnable)
+            mainHandler.postDelayed(persistSmsRunnable, PERSIST_DEBOUNCE_MS)
+        }
+        smsDestination.addTextChangedListener {
+            validateSmsDestination(it?.toString().orEmpty())
+            smsPersistWatcher(it)
+        }
+        smsEnabled.setOnCheckedChangeListener { _, _ ->
+            mainHandler.removeCallbacks(persistSmsRunnable)
+            mainHandler.postDelayed(persistSmsRunnable, PERSIST_DEBOUNCE_MS)
+        }
+
         forwardTemplate.setText(prefs.getString("forwardTemplate", ""))
         forwardTemplate.addTextChangedListener { text ->
             pendingTemplateText = text?.toString().orEmpty()
@@ -195,6 +225,10 @@ class SettingsActivity : AppCompatActivity() {
             flushPendingWrites()
             sendTelegramTestMessage()
         }
+        sendSmsTestButton.setOnClickListener {
+            flushPendingWrites()
+            sendSmsTestMessage()
+        }
     }
 
     override fun onPause() {
@@ -209,6 +243,7 @@ class SettingsActivity : AppCompatActivity() {
             persistRegexesRunnable,
             persistWaRunnable,
             persistTgRunnable,
+            persistSmsRunnable,
             persistTemplateRunnable,
         ).forEach {
             mainHandler.removeCallbacks(it)
@@ -241,6 +276,14 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
+    private fun persistSmsConfig() {
+        prefs.edit {
+            putBoolean(SmsConfig.KEY_ENABLED, smsEnabled.isChecked)
+            putString(SmsConfig.KEY_DESTINATION, smsDestination.text?.toString()?.trim().orEmpty())
+        }
+        warnIfSmsDestinationIsAllowedSender()
+    }
+
     private fun updateTemplateFieldsEnabled(enabled: Boolean) {
         waTemplateNameLayout.isEnabled = enabled
         waTemplateLanguageLayout.isEnabled = enabled
@@ -254,6 +297,30 @@ class SettingsActivity : AppCompatActivity() {
             !PhoneNumberUtils.isWellFormedSmsAddress(text) ->
                 "Doesn't look like an E.164 number"
             else -> null
+        }
+    }
+
+    private fun validateSmsDestination(text: String) {
+        smsDestinationLayout.error = when {
+            text.isEmpty() -> null
+            !PhoneNumberUtils.isWellFormedSmsAddress(text) ->
+                "Doesn't look like a valid SMS address"
+            else -> null
+        }
+    }
+
+    private fun warnIfSmsDestinationIsAllowedSender() {
+        val config = SmsConfig.load(prefs)
+        if (!config.enabled || config.destination.isEmpty()) return
+        val allowed = SenderListStore.load(prefs).filter { it.isNotBlank() }
+        if (allowed.isEmpty()) return
+        val iso = SenderMatcher.deviceCountryIso(this)
+        if (SenderMatcher.matches(allowed, config.destination, iso)) {
+            Snackbar.make(
+                rootContainer,
+                "SMS destination is also an allowed sender. The loop guard will suppress its replies.",
+                Snackbar.LENGTH_LONG
+            ).show()
         }
     }
 
@@ -301,6 +368,25 @@ class SettingsActivity : AppCompatActivity() {
         )
         TelegramChannel.send(this, config, body)
         Snackbar.make(rootContainer, "Sending Telegram test\u2026 see Activity log.", Snackbar.LENGTH_SHORT).show()
+    }
+
+    private fun sendSmsTestMessage() {
+        val config = SmsConfig.load(prefs)
+        if (!config.hasCredentials) {
+            Snackbar.make(
+                rootContainer,
+                "Set the SMS destination number first.",
+                Snackbar.LENGTH_LONG
+            ).show()
+            return
+        }
+        val body = "MC SMS\u2192SMS Test \u2014 manual test send at ${System.currentTimeMillis()}"
+        LogUtils.addToLog(
+            this,
+            "REAL SEND [SMS] \u2192 To: ${config.destination} | Msg: $body (manual test)"
+        )
+        SmsForwardChannel.send(this, config, body)
+        Snackbar.make(rootContainer, "Sending SMS test\u2026 see Activity log.", Snackbar.LENGTH_SHORT).show()
     }
 
     private fun addSenderRow(initialValue: String): View {

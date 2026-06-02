@@ -32,6 +32,7 @@ import com.google.android.material.snackbar.Snackbar
 import com.miguelcaldas.mcsmsforwardermultichannel.util.ForwardStatsStore
 import com.miguelcaldas.mcsmsforwardermultichannel.util.RegexListStore
 import com.miguelcaldas.mcsmsforwardermultichannel.util.SenderListStore
+import com.miguelcaldas.mcsmsforwardermultichannel.util.SmsConfig
 import com.miguelcaldas.mcsmsforwardermultichannel.util.TelegramConfig
 import com.miguelcaldas.mcsmsforwardermultichannel.util.WhatsAppConfig
 import java.text.DateFormat
@@ -50,6 +51,7 @@ class MainActivity : AppCompatActivity() {
 
     private val REQUIRED_PERMISSIONS = arrayOf(
         Manifest.permission.RECEIVE_SMS,
+        Manifest.permission.SEND_SMS,
         Manifest.permission.POST_NOTIFICATIONS,
     )
 
@@ -190,9 +192,10 @@ class MainActivity : AppCompatActivity() {
 
         val waConfig = WhatsAppConfig.load(prefs)
         val tgConfig = TelegramConfig.load(prefs)
+        val smsConfig = SmsConfig.load(prefs)
         addReadinessRow(
             "At least one channel enabled",
-            waConfig.enabled || tgConfig.enabled,
+            waConfig.enabled || tgConfig.enabled || smsConfig.enabled,
             fixLabel = "Open",
             onFix = { startActivity(Intent(this, SettingsActivity::class.java)) }
         )
@@ -234,6 +237,21 @@ class MainActivity : AppCompatActivity() {
             addReadinessRow(
                 "Telegram chat ID set",
                 tgConfig.chatId.isNotEmpty(),
+                fixLabel = "Open",
+                onFix = { startActivity(Intent(this, SettingsActivity::class.java)) }
+            )
+        }
+        if (smsConfig.enabled) {
+            addReadinessRow(
+                "Send SMS permission",
+                ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) ==
+                    PackageManager.PERMISSION_GRANTED,
+                fixLabel = "Grant",
+                onFix = { requestMultiplePermissionsLauncher.launch(REQUIRED_PERMISSIONS) }
+            )
+            addReadinessRow(
+                "SMS destination set (E.164)",
+                smsConfig.destination.isNotEmpty(),
                 fixLabel = "Open",
                 onFix = { startActivity(Intent(this, SettingsActivity::class.java)) }
             )

@@ -4,12 +4,15 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
+import android.telephony.PhoneNumberUtils
 import com.miguelcaldas.mcsmsforwardermultichannel.util.ForwardStatsStore
 import com.miguelcaldas.mcsmsforwardermultichannel.util.ForwardTemplate
 import com.miguelcaldas.mcsmsforwardermultichannel.util.LogUtils
 import com.miguelcaldas.mcsmsforwardermultichannel.util.RegexListStore
 import com.miguelcaldas.mcsmsforwardermultichannel.util.SenderListStore
 import com.miguelcaldas.mcsmsforwardermultichannel.util.SenderMatcher
+import com.miguelcaldas.mcsmsforwardermultichannel.util.SmsConfig
+import com.miguelcaldas.mcsmsforwardermultichannel.util.SmsForwardChannel
 import com.miguelcaldas.mcsmsforwardermultichannel.util.TelegramChannel
 import com.miguelcaldas.mcsmsforwardermultichannel.util.TelegramConfig
 import com.miguelcaldas.mcsmsforwardermultichannel.util.TextNormalizer
@@ -29,8 +32,9 @@ class SmsReceiver : BroadcastReceiver() {
 
         val waConfig = WhatsAppConfig.load(prefs)
         val tgConfig = TelegramConfig.load(prefs)
-        // Bail before any other work if neither outbound channel is enabled+configured.
-        if (!waConfig.isOperational && !tgConfig.isOperational) return
+        val smsConfig = SmsConfig.load(prefs)
+        // Bail before any other work if no outbound channel is enabled+configured.
+        if (!waConfig.isOperational && !tgConfig.isOperational && !smsConfig.isOperational) return
 
         val allowedSenders = SenderListStore.load(prefs)
         if (allowedSenders.isEmpty()) return
@@ -51,6 +55,22 @@ class SmsReceiver : BroadcastReceiver() {
         }
 
         val countryIso = SenderMatcher.deviceCountryIso(context)
+
+        // Loop guard (SMS channel only): never re-forward a message that arrived from our
+        // own SMS forward destination. Same-transport echo would otherwise bounce
+        // indefinitely if the destination is also an allowed sender. WhatsApp/Telegram
+        // run on a different transport and cannot trigger this, so the guard is scoped
+        // to the SMS channel's destination.
+        if (smsConfig.isOperational &&
+            PhoneNumberUtils.areSamePhoneNumber(sender, smsConfig.destination, countryIso)
+        ) {
+            LogUtils.addToLog(
+                context,
+                "LOOP GUARD → suppressed from $sender (= SMS forward destination)"
+            )
+            return
+        }
+
         if (!SenderMatcher.matches(allowedSenders, sender, countryIso)) return
 
         // Compile each pattern at most once per call; the previous form rebuilt Regex
@@ -75,7 +95,12 @@ class SmsReceiver : BroadcastReceiver() {
         val app = context.applicationContext
         val sendViaWa = waConfig.isOperational
         val sendViaTg = tgConfig.isOperational
-        val remaining = AtomicInteger((if (sendViaWa) 1 else 0) + (if (sendViaTg) 1 else 0))
+        val sendViaSms = smsConfig.isOperational
+        val remaining = AtomicInteger(
+            (if (sendViaWa) 1 else 0) +
+                (if (sendViaTg) 1 else 0) +
+                (if (sendViaSms) 1 else 0)
+        )
         val anySuccess = AtomicBoolean(false)
         val onChannelDone: (Boolean) -> Unit = { success ->
             if (success) anySuccess.set(true)
@@ -98,6 +123,13 @@ class SmsReceiver : BroadcastReceiver() {
                 "REAL SEND [Telegram] \u2192 To: chat ${tgConfig.chatId} | Msg: $outgoingBody"
             )
             TelegramChannel.send(context, tgConfig, outgoingBody, onChannelDone)
+        }
+        if (sendViaSms) {
+            LogUtils.addToLog(
+                context,
+                "REAL SEND [SMS] \u2192 To: ${smsConfig.destination} | Msg: $outgoingBody"
+            )
+            SmsForwardChannel.send(context, smsConfig, outgoingBody, onChannelDone)
         }
     }
 }

@@ -5,6 +5,9 @@
     <!-- Permissions for receiving SMS -->
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
 
+    <!-- Permission for re-sending the forwarded message via the SMS channel -->
+    <uses-permission android:name="android.permission.SEND_SMS" />
+
     <!-- Network for posting to the WhatsApp Cloud API -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />

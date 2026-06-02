@@ -122,7 +122,7 @@ class LogActivity : AppCompatActivity() {
         val payload = logs.joinToString("\n")
         val send = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
-            putExtra(Intent.EXTRA_SUBJECT, "MC SMS\u2192WhatsApp Test log")
+            putExtra(Intent.EXTRA_SUBJECT, "MC SMS Forwarder log")
             putExtra(Intent.EXTRA_TEXT, payload)
         }
         startActivity(Intent.createChooser(send, "Share log"))
