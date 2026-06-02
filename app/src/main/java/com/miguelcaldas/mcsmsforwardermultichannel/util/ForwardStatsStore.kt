@@ -1,4 +1,4 @@
-package com.miguelcaldas.mcsmsforwarderwhatsapp.util
+package com.miguelcaldas.mcsmsforwardermultichannel.util
 
 import android.content.Context
 import androidx.core.content.edit

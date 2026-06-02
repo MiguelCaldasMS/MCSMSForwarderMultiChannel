@@ -1,4 +1,4 @@
-package com.miguelcaldas.mcsmsforwarderwhatsapp.util
+package com.miguelcaldas.mcsmsforwardermultichannel.util
 
 import java.text.SimpleDateFormat
 import java.util.Date

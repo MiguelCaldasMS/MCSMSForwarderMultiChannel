@@ -1,9 +1,9 @@
-package com.miguelcaldas.mcsmsforwarderwhatsapp
+package com.miguelcaldas.mcsmsforwardermultichannel
 
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.LogUtils
+import com.miguelcaldas.mcsmsforwardermultichannel.util.LogUtils
 
 // Wakes the package after a reboot so the SMS receiver is "warm" before the first
 // SMS arrives. Does no real work — its existence is the point: a manifest receiver

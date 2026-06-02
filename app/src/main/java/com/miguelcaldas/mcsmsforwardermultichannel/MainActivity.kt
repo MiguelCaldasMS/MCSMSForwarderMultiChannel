@@ -1,4 +1,4 @@
-package com.miguelcaldas.mcsmsforwarderwhatsapp
+package com.miguelcaldas.mcsmsforwardermultichannel
 
 import android.Manifest
 import android.content.Context
@@ -29,11 +29,11 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.snackbar.Snackbar
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.ForwardStatsStore
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.RegexListStore
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.SenderListStore
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.TelegramConfig
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.WhatsAppConfig
+import com.miguelcaldas.mcsmsforwardermultichannel.util.ForwardStatsStore
+import com.miguelcaldas.mcsmsforwardermultichannel.util.RegexListStore
+import com.miguelcaldas.mcsmsforwardermultichannel.util.SenderListStore
+import com.miguelcaldas.mcsmsforwardermultichannel.util.TelegramConfig
+import com.miguelcaldas.mcsmsforwardermultichannel.util.WhatsAppConfig
 import java.text.DateFormat
 import java.util.Date
 

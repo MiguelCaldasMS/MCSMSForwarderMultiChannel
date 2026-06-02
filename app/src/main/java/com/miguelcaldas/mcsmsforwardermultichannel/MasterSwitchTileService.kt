@@ -1,11 +1,11 @@
-package com.miguelcaldas.mcsmsforwarderwhatsapp
+package com.miguelcaldas.mcsmsforwardermultichannel
 
 import android.content.Context
 import android.graphics.drawable.Icon
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import androidx.core.content.edit
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.LogUtils
+import com.miguelcaldas.mcsmsforwardermultichannel.util.LogUtils
 
 class MasterSwitchTileService : TileService() {
 

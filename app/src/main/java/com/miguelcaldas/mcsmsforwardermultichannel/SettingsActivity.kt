@@ -1,4 +1,4 @@
-package com.miguelcaldas.mcsmsforwarderwhatsapp
+package com.miguelcaldas.mcsmsforwardermultichannel
 
 import android.content.Context
 import android.content.Intent
@@ -23,13 +23,13 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.textfield.TextInputLayout
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.LogUtils
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.RegexListStore
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.SenderListStore
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.TelegramChannel
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.TelegramConfig
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.WhatsAppCloudChannel
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.WhatsAppConfig
+import com.miguelcaldas.mcsmsforwardermultichannel.util.LogUtils
+import com.miguelcaldas.mcsmsforwardermultichannel.util.RegexListStore
+import com.miguelcaldas.mcsmsforwardermultichannel.util.SenderListStore
+import com.miguelcaldas.mcsmsforwardermultichannel.util.TelegramChannel
+import com.miguelcaldas.mcsmsforwardermultichannel.util.TelegramConfig
+import com.miguelcaldas.mcsmsforwardermultichannel.util.WhatsAppCloudChannel
+import com.miguelcaldas.mcsmsforwardermultichannel.util.WhatsAppConfig
 
 class SettingsActivity : AppCompatActivity() {
 

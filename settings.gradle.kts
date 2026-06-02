@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "MCSMSForwarderWhatsAppTest"
+rootProject.name = "MCSMSForwarderMultiChannel"
 include(":app")

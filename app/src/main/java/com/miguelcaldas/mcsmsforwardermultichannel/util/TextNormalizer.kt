@@ -1,4 +1,4 @@
-package com.miguelcaldas.mcsmsforwarderwhatsapp.util
+package com.miguelcaldas.mcsmsforwardermultichannel.util
 
 import java.text.Normalizer
 import java.util.Locale

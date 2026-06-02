@@ -23,7 +23,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:enableOnBackInvokedCallback="true"
-        android:theme="@style/Theme.MCSmsForwarderWhatsAppTest">
+        android:theme="@style/Theme.MCSmsForwarderMultiChannel">
 
         <activity
             android:name=".RegexTesterActivity"

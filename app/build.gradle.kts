@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.miguelcaldas.mcsmsforwarderwhatsapp"
+    namespace = "com.miguelcaldas.mcsmsforwardermultichannel"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     // Release signing is opt-in. Define these in ~/.gradle/gradle.properties (or pass via
@@ -21,7 +21,7 @@ android {
         !keyPassword.isNullOrEmpty()
 
     defaultConfig {
-        applicationId = "com.miguelcaldas.mcsmsforwarderwhatsapp"
+        applicationId = "com.miguelcaldas.mcsmsforwardermultichannel"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = 1

@@ -1,4 +1,4 @@
-package com.miguelcaldas.mcsmsforwarderwhatsapp
+package com.miguelcaldas.mcsmsforwardermultichannel
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -14,13 +14,13 @@ import androidx.core.view.updatePadding
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.snackbar.Snackbar
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.ForwardTemplate
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.LogUtils
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.RegexListStore
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.SenderListStore
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.SenderMatcher
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.TextNormalizer
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.WhatsAppConfig
+import com.miguelcaldas.mcsmsforwardermultichannel.util.ForwardTemplate
+import com.miguelcaldas.mcsmsforwardermultichannel.util.LogUtils
+import com.miguelcaldas.mcsmsforwardermultichannel.util.RegexListStore
+import com.miguelcaldas.mcsmsforwardermultichannel.util.SenderListStore
+import com.miguelcaldas.mcsmsforwardermultichannel.util.SenderMatcher
+import com.miguelcaldas.mcsmsforwardermultichannel.util.TextNormalizer
+import com.miguelcaldas.mcsmsforwardermultichannel.util.WhatsAppConfig
 
 class RegexTesterActivity : AppCompatActivity() {
 

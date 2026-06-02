@@ -13,7 +13,10 @@
 			"git init": true,
 			"git add": true,
 			"git commit": true,
-			"git remote": true
+			"git remote": true,
+			"git mv": true,
+			"git -C c:\\Projects\\MCSMSForwarderMultiChannel": true,
+			"Set-Content": true
 		}
 	}
 }

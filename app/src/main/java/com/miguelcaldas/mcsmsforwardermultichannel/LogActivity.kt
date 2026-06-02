@@ -1,4 +1,4 @@
-package com.miguelcaldas.mcsmsforwarderwhatsapp
+package com.miguelcaldas.mcsmsforwardermultichannel
 
 import android.content.Intent
 import android.os.Bundle
@@ -17,7 +17,7 @@ import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.snackbar.Snackbar
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.LogUtils
+import com.miguelcaldas.mcsmsforwardermultichannel.util.LogUtils
 
 class LogActivity : AppCompatActivity() {
 

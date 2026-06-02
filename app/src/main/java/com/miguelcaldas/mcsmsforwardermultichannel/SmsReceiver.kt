@@ -1,20 +1,20 @@
-package com.miguelcaldas.mcsmsforwarderwhatsapp
+package com.miguelcaldas.mcsmsforwardermultichannel
 
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.ForwardStatsStore
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.ForwardTemplate
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.LogUtils
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.RegexListStore
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.SenderListStore
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.SenderMatcher
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.TelegramChannel
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.TelegramConfig
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.TextNormalizer
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.WhatsAppCloudChannel
-import com.miguelcaldas.mcsmsforwarderwhatsapp.util.WhatsAppConfig
+import com.miguelcaldas.mcsmsforwardermultichannel.util.ForwardStatsStore
+import com.miguelcaldas.mcsmsforwardermultichannel.util.ForwardTemplate
+import com.miguelcaldas.mcsmsforwardermultichannel.util.LogUtils
+import com.miguelcaldas.mcsmsforwardermultichannel.util.RegexListStore
+import com.miguelcaldas.mcsmsforwardermultichannel.util.SenderListStore
+import com.miguelcaldas.mcsmsforwardermultichannel.util.SenderMatcher
+import com.miguelcaldas.mcsmsforwardermultichannel.util.TelegramChannel
+import com.miguelcaldas.mcsmsforwardermultichannel.util.TelegramConfig
+import com.miguelcaldas.mcsmsforwardermultichannel.util.TextNormalizer
+import com.miguelcaldas.mcsmsforwardermultichannel.util.WhatsAppCloudChannel
+import com.miguelcaldas.mcsmsforwardermultichannel.util.WhatsAppConfig
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
