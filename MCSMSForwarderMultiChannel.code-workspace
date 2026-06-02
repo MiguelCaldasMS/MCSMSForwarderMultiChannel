@@ -16,7 +16,8 @@
 			"git remote": true,
 			"git mv": true,
 			"git -C c:\\Projects\\MCSMSForwarderMultiChannel": true,
-			"Set-Content": true
+			"Set-Content": true,
+			"git push": true
 		}
 	}
 }
