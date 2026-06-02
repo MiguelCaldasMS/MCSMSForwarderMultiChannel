@@ -77,11 +77,9 @@ line-oriented format. WhatsApp credentials live under keys defined in `WhatsAppC
 `waPhoneNumberId`, `waRecipient`, `waUseTemplate` (default true), `waTemplateName`,
 `waTemplateLanguage` (default `en_US`), `waEnabled` (default true). Telegram: `tgEnabled` (default
 false), `tgChatId` (`TelegramConfig`). SMS: `smsEnabled` (default false) and
-`forwardTo` — the destination key is reused from the legacy single-channel app so a migrated
-install keeps its number (`SmsConfig`). **Secrets (the WhatsApp access token `waAccessToken` and
+`forwardTo` — the destination number (`SmsConfig`). **Secrets (the WhatsApp access token `waAccessToken` and
 the Telegram bot token `tgBotToken`) are NOT in this file** — they live encrypted-at-rest in a
-separate `EncryptedSharedPreferences` file (`mc_sms_fwd_secure`) via `SecureStore`, which also
-migrates any legacy plaintext token out of `mc_sms_fwd_wa` on first read. Configs read tokens by
+separate `EncryptedSharedPreferences` file (`mc_sms_fwd_secure`) via `SecureStore`. Configs read tokens by
 calling `SecureStore.read(context, …)`, so `WhatsAppConfig.load`/`TelegramConfig.load` take a
 `Context` (not a `SharedPreferences`).
 

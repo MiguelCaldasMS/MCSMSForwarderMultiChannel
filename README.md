@@ -160,7 +160,7 @@ Single-module Android app (`:app`), Kotlin, no Compose — XML layouts with Mate
 
 `WhatsAppCloudChannel`, `TelegramChannel`, and `SmsChannel` are sibling singletons. The two HTTP channels use `HttpURLConnection` on their own single-thread daemon executor (`wa-sender`, `tg-sender`), 10 s connect / 20 s read, and report `SEND OK`/`SEND FAILED` with the HTTP status and provider-specific error summary (Meta `error.{code,type,message}` for WhatsApp, Telegram `error_code` + `description` for Telegram). Neither ever logs its bearer/bot token. `SmsChannel` dispatches through `SmsManager.sendMultipartTextMessage` and registers a private result receiver that logs the modem's per-segment outcome. Stats are owned solely by `SmsReceiver` — the channels only log.
 
-Secrets (the WhatsApp access token and Telegram bot token) live in a separate `EncryptedSharedPreferences` file (`mc_sms_fwd_secure`) via the `SecureStore` singleton, which also migrates any legacy plaintext token out of the unencrypted prefs on first read. `WhatsAppConfig.load` / `TelegramConfig.load` take a `Context` so they can read those tokens; everything else (toggles, phone numbers, chat IDs, lists, logs, stats) stays in the plaintext `mc_sms_fwd_wa` prefs.
+Secrets (the WhatsApp access token and Telegram bot token) live in a separate `EncryptedSharedPreferences` file (`mc_sms_fwd_secure`) via the `SecureStore` singleton. `WhatsAppConfig.load` / `TelegramConfig.load` take a `Context` so they can read those tokens; everything else (toggles, phone numbers, chat IDs, lists, logs, stats) stays in the plaintext `mc_sms_fwd_wa` prefs.
 
 ## License
 
