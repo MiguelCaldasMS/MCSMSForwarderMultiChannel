@@ -13,7 +13,8 @@ import java.util.concurrent.Executors
  *
  * Stats are incremented only when the API returns 2xx. The access token never
  * appears in log entries — only the HTTP status code and (if present) Meta's
- * `error.code` / `error.message` summary.
+ * `error.code` / `error.message` summary, with any echoed copy of the token
+ * redacted before logging.
  */
 object WhatsAppCloudChannel {
     private const val GRAPH_BASE = "https://graph.facebook.com/v21.0"
@@ -53,14 +54,17 @@ object WhatsAppCloudChannel {
                         )
                     }
                     result != null -> {
-                        val detail = result.errorSummary?.takeIf { it.isNotBlank() }?.let { " $it" }.orEmpty()
+                        // Meta echoes a malformed/invalid token back in error.message (code 190),
+                        // so redact the access token from the summary before logging.
+                        val detail = result.errorSummary?.takeIf { it.isNotBlank() }
+                            ?.let { " ${redactSecret(it, config.accessToken)}" }.orEmpty()
                         LogUtils.addToLog(
                             app,
                             "SEND FAILED [WhatsApp] → ${config.recipient} (HTTP ${result.statusCode})$detail"
                         )
                     }
                     else -> {
-                        val msg = outcome.exceptionOrNull()?.message.orEmpty()
+                        val msg = redactSecret(outcome.exceptionOrNull()?.message.orEmpty(), config.accessToken)
                         LogUtils.addToLog(
                             app,
                             "SEND FAILED [WhatsApp] → ${config.recipient} (transport) $msg".trimEnd()
@@ -74,6 +78,14 @@ object WhatsAppCloudChannel {
     }
 
     private data class Outcome(val statusCode: Int, val success: Boolean, val errorSummary: String?)
+
+    /**
+     * Removes the access token from a string that is about to be logged. Meta's error.message
+     * echoes a malformed token verbatim (code 190) and transport exceptions can embed request
+     * details, so any occurrence of the secret is replaced with a fixed placeholder.
+     */
+    private fun redactSecret(text: String, secret: String): String =
+        if (secret.isBlank()) text else text.replace(secret, "[redacted]")
 
     private fun postSync(config: WhatsAppConfig, body: String): Outcome {
         val url = URL("$GRAPH_BASE/${config.phoneNumberId}/messages")

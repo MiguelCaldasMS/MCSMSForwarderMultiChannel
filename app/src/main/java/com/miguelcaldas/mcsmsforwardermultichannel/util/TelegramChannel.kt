@@ -14,7 +14,8 @@ import java.util.concurrent.Executors
  * Success is signalled to the caller via `onComplete(true|false)` so the
  * receiver can decide whether to record a forward stat. The bot token is
  * URL-encoded out of paranoia and never appears in log entries — only the
- * HTTP status code and (if present) Telegram's `description` field.
+ * HTTP status code and (if present) Telegram's `description` field, with any
+ * echoed copy of the token (including the URL form) redacted before logging.
  */
 object TelegramChannel {
     private const val API_BASE = "https://api.telegram.org"
@@ -51,14 +52,18 @@ object TelegramChannel {
                         )
                     }
                     result != null -> {
-                        val detail = result.errorSummary?.takeIf { it.isNotBlank() }?.let { " $it" }.orEmpty()
+                        val detail = result.errorSummary?.takeIf { it.isNotBlank() }
+                            ?.let { " ${redactSecret(it, config.botToken)}" }.orEmpty()
                         LogUtils.addToLog(
                             app,
                             "SEND FAILED [Telegram] → chat ${config.chatId} (HTTP ${result.statusCode})$detail"
                         )
                     }
                     else -> {
-                        val msg = outcome.exceptionOrNull()?.message.orEmpty()
+                        // The bot token lives in the request URL, and HttpURLConnection exceptions
+                        // (FileNotFoundException, SSL/IO errors) can embed that full URL — so redact
+                        // both the raw token and its URL-encoded form before logging.
+                        val msg = redactSecret(outcome.exceptionOrNull()?.message.orEmpty(), config.botToken)
                         LogUtils.addToLog(
                             app,
                             "SEND FAILED [Telegram] → chat ${config.chatId} (transport) $msg".trimEnd()
@@ -72,6 +77,17 @@ object TelegramChannel {
     }
 
     private data class Outcome(val statusCode: Int, val success: Boolean, val errorSummary: String?)
+
+    /**
+     * Removes the bot token from a string that is about to be logged. The token is part of every
+     * request URL, so transport exceptions can leak it; both the raw token and its URL-encoded
+     * form are replaced with a fixed placeholder.
+     */
+    private fun redactSecret(text: String, secret: String): String {
+        if (secret.isBlank()) return text
+        val encoded = runCatching { URLEncoder.encode(secret, "UTF-8") }.getOrDefault(secret)
+        return text.replace(secret, "[redacted]").replace(encoded, "[redacted]")
+    }
 
     private fun postSync(config: TelegramConfig, body: String): Outcome {
         // Bot tokens are of the form `{bot_id}:{secret}`; URL-encode just in case the

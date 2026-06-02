@@ -23,7 +23,8 @@
 			"&": true,
 			"ForEach-Object": true,
 			"Rename-Item": true,
-			"Copy-Item": true
+			"Copy-Item": true,
+			"emulator": true
 		}
 	}
 }
