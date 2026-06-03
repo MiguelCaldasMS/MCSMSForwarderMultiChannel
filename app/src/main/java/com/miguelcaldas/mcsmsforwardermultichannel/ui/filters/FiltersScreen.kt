@@ -22,7 +22,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -105,14 +104,17 @@ fun FiltersScreen(onBack: () -> Unit, viewModel: FiltersViewModel = viewModel())
 
             RulesCard(
                 rules = rules,
-                onAdd = {
-                    viewModel.addRule()
+                onAdd = { raw ->
+                    val error = viewModel.addRule(raw)
+                    if (error != null) {
+                        scope.launch {
+                            snackbarHostState.showSnackbar(error)
+                        }
+                    }
+                    error == null
                 },
-                onChange = { index, value ->
-                    viewModel.updateRule(index, value)
-                },
-                onRemove = { index ->
-                    viewModel.removeRule(index)
+                onRemove = { value ->
+                    viewModel.removeRule(value)
                 },
             )
 
@@ -205,13 +207,17 @@ private fun SendersCard(senders: List<String>, onAdd: (String) -> Boolean, onRem
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun RulesCard(
-    rules: List<String>,
-    onAdd: () -> Unit,
-    onChange: (Int, String) -> Unit,
-    onRemove: (Int) -> Unit,
-) {
+private fun RulesCard(rules: List<String>, onAdd: (String) -> Boolean, onRemove: (String) -> Unit) {
+    var newRule by rememberSaveable { mutableStateOf("") }
+
+    fun commit() {
+        if (onAdd(newRule)) {
+            newRule = ""
+        }
+    }
+
     Card {
         Column(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Message format rules", style = MaterialTheme.typography.titleMedium)
@@ -219,26 +225,42 @@ private fun RulesCard(
                 "Regular expressions matched against the message body (accent- and case-insensitive). A message forwards if it matches any rule. With no rules, nothing is forwarded.",
                 style = MaterialTheme.typography.bodyMedium,
             )
-            rules.forEachIndexed { index, rule ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = rule,
-                        onValueChange = { value ->
-                            onChange(index, value)
-                        },
-                        label = { Text("Rule ${index + 1}") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                    IconButton(onClick = { onRemove(index) }) {
-                        Icon(painterResource(R.drawable.ic_delete_24), contentDescription = "Remove rule ${index + 1}")
+            if (rules.isEmpty()) {
+                Text(
+                    "No rules yet — nothing will be forwarded until you add at least one.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            } else {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    rules.forEach { rule ->
+                        InputChip(
+                            selected = false,
+                            onClick = {
+                                onRemove(rule)
+                            },
+                            label = { Text(rule) },
+                            trailingIcon = {
+                                Icon(painterResource(R.drawable.ic_close_24), contentDescription = "Remove $rule")
+                            },
+                        )
                     }
                 }
             }
-            OutlinedButton(onClick = { onAdd() }, modifier = Modifier.fillMaxWidth()) {
-                Icon(painterResource(R.drawable.ic_add_24), contentDescription = null)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = newRule,
+                    onValueChange = { newRule = it },
+                    label = { Text("Add rule") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { commit() }),
+                    modifier = Modifier.weight(1f),
+                )
                 Spacer(Modifier.width(8.dp))
-                Text("Add rule")
+                Button(onClick = { commit() }) {
+                    Text("Add")
+                }
             }
         }
     }

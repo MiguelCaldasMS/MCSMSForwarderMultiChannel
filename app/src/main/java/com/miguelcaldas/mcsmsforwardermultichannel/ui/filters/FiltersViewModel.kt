@@ -51,25 +51,24 @@ class FiltersViewModel(application: Application) : AndroidViewModel(application)
         _senders.value = _senders.value.filterNot { it == value }
     }
 
-    fun addRule() {
-        _rules.value = _rules.value + ""
+    fun addRule(raw: String): String? {
+        // RegexListStore does not trim — leading/trailing whitespace can be part of a pattern,
+        // so only an entirely empty entry is rejected.
+        if (raw.isEmpty()) {
+            return "Enter a rule first"
+        }
+        if (_rules.value.any { it == raw }) {
+            return "Already in the list"
+        }
+        if (runCatching { Regex(raw) }.isFailure) {
+            return "Not a valid pattern"
+        }
+        _rules.value = _rules.value + raw
+        return null
     }
 
-    fun updateRule(index: Int, value: String) {
-        val updated = _rules.value.toMutableList()
-        if (index in updated.indices) {
-            // RegexListStore does not trim — leading/trailing whitespace can be part of a pattern.
-            updated[index] = value
-            _rules.value = updated
-        }
-    }
-
-    fun removeRule(index: Int) {
-        val updated = _rules.value.toMutableList()
-        if (index in updated.indices) {
-            updated.removeAt(index)
-            _rules.value = updated
-        }
+    fun removeRule(value: String) {
+        _rules.value = _rules.value.filterNot { it == value }
     }
 
     fun setTemplate(value: String) {
