@@ -1,6 +1,5 @@
 package com.miguelcaldas.mcsmsforwardermultichannel.ui.channels
 
-import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,7 +16,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -28,19 +26,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.miguelcaldas.mcsmsforwardermultichannel.RegexTesterActivity
-import com.miguelcaldas.mcsmsforwardermultichannel.SettingsActivity
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChannelsScreen(onOpenChannel: (ChannelType) -> Unit, viewModel: ChannelsViewModel = viewModel()) {
-    val context = LocalContext.current
+fun ChannelsScreen(onOpenChannel: (ChannelType) -> Unit, onOpenFilters: () -> Unit, viewModel: ChannelsViewModel = viewModel()) {
     val channels by viewModel.channels.collectAsStateWithLifecycle()
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
@@ -80,29 +74,13 @@ fun ChannelsScreen(onOpenChannel: (ChannelType) -> Unit, viewModel: ChannelsView
 
             Spacer(Modifier.height(4.dp))
 
-            Card {
-                Column(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Card(onClick = onOpenFilters) {
+                Column(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Senders, rules & template", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "Allowed senders, match rules and the forwarding template. A redesigned editor is coming; for now this opens the existing settings.",
+                        "Choose which senders are allowed, the match rules, and the forwarding template. Applies to every channel.",
                         style = MaterialTheme.typography.bodyMedium,
                     )
-                    OutlinedButton(
-                        onClick = {
-                            context.startActivity(Intent(context, SettingsActivity::class.java))
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text("Open settings")
-                    }
-                    OutlinedButton(
-                        onClick = {
-                            context.startActivity(Intent(context, RegexTesterActivity::class.java))
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text("Open regex tester")
-                    }
                 }
             }
         }

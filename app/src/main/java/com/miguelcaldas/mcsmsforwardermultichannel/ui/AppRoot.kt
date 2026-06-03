@@ -21,6 +21,8 @@ import androidx.navigation.navArgument
 import com.miguelcaldas.mcsmsforwardermultichannel.ui.channels.ChannelDetailScreen
 import com.miguelcaldas.mcsmsforwardermultichannel.ui.channels.ChannelType
 import com.miguelcaldas.mcsmsforwardermultichannel.ui.channels.ChannelsScreen
+import com.miguelcaldas.mcsmsforwardermultichannel.ui.filters.FiltersScreen
+import com.miguelcaldas.mcsmsforwardermultichannel.ui.filters.RegexTesterScreen
 import com.miguelcaldas.mcsmsforwardermultichannel.ui.log.LogScreen
 import com.miguelcaldas.mcsmsforwardermultichannel.ui.navigation.TopLevelDestination
 import com.miguelcaldas.mcsmsforwardermultichannel.ui.status.StatusScreen
@@ -70,11 +72,7 @@ fun AppRoot() {
                         }
                     },
                     onOpenFilters = {
-                        navController.navigate(TopLevelDestination.Channels.route) {
-                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
+                        navController.navigate("filters")
                     },
                 )
             }
@@ -82,6 +80,9 @@ fun AppRoot() {
                 ChannelsScreen(
                     onOpenChannel = { type ->
                         navController.navigate("channel_detail/${type.name}")
+                    },
+                    onOpenFilters = {
+                        navController.navigate("filters")
                     },
                 )
             }
@@ -99,6 +100,23 @@ fun AppRoot() {
             }
             composable(TopLevelDestination.Activity.route) {
                 LogScreen()
+            }
+            composable("filters") {
+                FiltersScreen(
+                    onBack = {
+                        navController.popBackStack()
+                    },
+                    onOpenTester = {
+                        navController.navigate("regex_tester")
+                    },
+                )
+            }
+            composable("regex_tester") {
+                RegexTesterScreen(
+                    onBack = {
+                        navController.popBackStack()
+                    },
+                )
             }
         }
     }
