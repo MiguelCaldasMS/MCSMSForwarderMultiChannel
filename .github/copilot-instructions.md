@@ -116,6 +116,11 @@ state restore doesn't copy the last-focused row's text onto every row after recr
   re-displayed (the field loads blank with a "saved" helper text); typing replaces the stored
   token, while leaving the field blank keeps the existing one. The SMS channel has no secret (it
   uses the device modem).
-- **`RegexTesterActivity` is a dry-run mirror of the live pipeline.** It must evaluate the same
-  channels `SmsReceiver` does (all three, via each config's `isOperational`); if you add or change
-  a channel, update the tester so the two cannot drift.
+- **`FiltersViewModel.runTest` is a dry-run mirror of the live pipeline.** The Filters screen has
+  an inline "Test a message" card (sample sender + message) that subjects the input to the
+  **currently displayed (possibly unsaved) draft** filters — draft senders, draft rules (match any,
+  invalid patterns skipped), draft template — and the same channels `SmsReceiver` does (all three,
+  via each config's `isOperational`). The last-used sender/message are persisted (`lastTestSender`,
+  `lastTestMessage`); the sender otherwise defaults to the first phone-like entry in the senders
+  list. If you add or change a channel or the matching logic, update `runTest` so the two cannot
+  drift.

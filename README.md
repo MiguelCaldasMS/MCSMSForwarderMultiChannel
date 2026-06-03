@@ -129,8 +129,9 @@ Filters are shared by every channel and live on the **Channels** tab under **Sen
 **Filtering (shared by all channels)**
 
 - **Allowed senders** — removable chips; phone numbers or alphanumeric IDs. Type one and tap **Add**.
-- **Message format rules** — editable regex rows; a message is forwarded if **any** pattern matches. A **Regex tester** dry-runs a sample body against the whole live pipeline.
+- **Message format rules** — editable regex rows; a message is forwarded if **any** pattern matches. With no rules, nothing is forwarded.
 - **Forwarding template** (optional) — `%s`, `%t`, `%m` tokens.
+- **Test a message** — an inline card that dry-runs a sample sender + message against the filters as currently shown on screen (no need to save first); the message starts blank and the sender defaults to the first phone in the list, both remembered from the last test. Nothing is sent.
 
 **WhatsApp Cloud API** (Channels tab → WhatsApp)
 

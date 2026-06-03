@@ -4,13 +4,23 @@ import android.app.Application
 import android.content.Context
 import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
+import com.miguelcaldas.mcsmsforwardermultichannel.util.ForwardTemplate
 import com.miguelcaldas.mcsmsforwardermultichannel.util.RegexListStore
 import com.miguelcaldas.mcsmsforwardermultichannel.util.SenderListStore
+import com.miguelcaldas.mcsmsforwardermultichannel.util.SenderMatcher
+import com.miguelcaldas.mcsmsforwardermultichannel.util.SmsConfig
+import com.miguelcaldas.mcsmsforwardermultichannel.util.TelegramConfig
+import com.miguelcaldas.mcsmsforwardermultichannel.util.TextNormalizer
+import com.miguelcaldas.mcsmsforwardermultichannel.util.WhatsAppConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 class FiltersViewModel(application: Application) : AndroidViewModel(application) {
+
+    enum class Tone { NEUTRAL, POSITIVE, ERROR }
+
+    data class TestOutcome(val text: String, val tone: Tone)
 
     private val prefs = application.getSharedPreferences("mc_sms_fwd_wa", Context.MODE_PRIVATE)
 
@@ -66,21 +76,91 @@ class FiltersViewModel(application: Application) : AndroidViewModel(application)
         _template.value = value
     }
 
-    // Adds a validated pattern to the draft rules (used by the regex tester's "Save pattern").
-    // Like every other edit here it stays in the draft until save() is called.
-    fun addPattern(pattern: String): String {
-        if (pattern.isBlank()) {
-            return "Enter a pattern first"
+    // The message has no default — it starts blank unless a previous test was run, in which
+    // case the last-tested message is restored.
+    fun lastTestMessage(): String {
+        return prefs.getString(KEY_LAST_TEST_MESSAGE, "").orEmpty()
+    }
+
+    // The sender defaults to the first phone-like entry in the (draft) senders list, unless a
+    // previous test already used a sender, in which case that saved value wins.
+    fun defaultTestSender(): String {
+        val saved = prefs.getString(KEY_LAST_TEST_SENDER, null)
+        if (!saved.isNullOrBlank()) {
+            return saved
         }
-        val invalid = runCatching { Regex(pattern) }.exceptionOrNull()
-        if (invalid != null) {
-            return "Invalid regex: ${invalid.message}"
+        val senders = _senders.value.filter { it.isNotBlank() }
+        return senders.firstOrNull { looksLikePhone(it) } ?: senders.firstOrNull() ?: ""
+    }
+
+    private fun looksLikePhone(value: String): Boolean {
+        val trimmed = value.trim()
+        return trimmed.startsWith("+") || trimmed.firstOrNull()?.isDigit() == true
+    }
+
+    // Dry-run mirror of SmsReceiver's pipeline, evaluated against the *currently displayed*
+    // (possibly unsaved) draft filters. Keep this in lockstep with the live receiver: the
+    // sender must be allowed, the message must match at least one rule, and at least one
+    // channel must be operational (toggle on AND credentials complete). Nothing is sent.
+    fun runTest(senderRaw: String, messageRaw: String): TestOutcome {
+        val context = getApplication<Application>()
+        val sender = senderRaw.trim()
+        val message = messageRaw
+
+        if (sender.isEmpty() || message.isEmpty()) {
+            return TestOutcome("Enter a sender and a message to test.", Tone.NEUTRAL)
         }
-        if (_rules.value.any { it == pattern }) {
-            return "Pattern already added"
+
+        // Remember the inputs so the next test pre-fills with what was last used.
+        prefs.edit {
+            putString(KEY_LAST_TEST_SENDER, sender)
+            putString(KEY_LAST_TEST_MESSAGE, message)
         }
-        _rules.value = _rules.value + pattern
-        return "Pattern added — Save to keep it"
+
+        val allowedSenders = _senders.value.filter { it.isNotBlank() }
+        val rules = _rules.value.filter { it.isNotBlank() }
+        val template = _template.value
+
+        val iso = SenderMatcher.deviceCountryIso(context)
+        val senderAllowed = allowedSenders.isNotEmpty() && SenderMatcher.matches(allowedSenders, sender, iso)
+
+        val normalized = TextNormalizer.normalizeForMatching(message)
+        // Same as the receiver: compile each rule at most once, silently skip invalid ones, match any.
+        val ruleMatches = rules.isNotEmpty() && rules.asSequence()
+            .mapNotNull { runCatching { Regex(it) }.getOrNull() }
+            .any { it.containsMatchIn(normalized) }
+
+        val waConfig = WhatsAppConfig.load(context)
+        val tgConfig = TelegramConfig.load(context)
+        val smsConfig = SmsConfig.load(prefs)
+        val operationalChannels = buildList {
+            if (waConfig.isOperational) {
+                add("WhatsApp ${waConfig.recipient}")
+            }
+            if (tgConfig.isOperational) {
+                add("Telegram chat ${tgConfig.chatId}")
+            }
+            if (smsConfig.isOperational) {
+                add("SMS ${smsConfig.destination}")
+            }
+        }
+
+        val outgoingBody = if (template.isEmpty()) message else ForwardTemplate.apply(template, sender, System.currentTimeMillis(), message)
+        val wouldSend = senderAllowed && ruleMatches && operationalChannels.isNotEmpty()
+
+        val builder = StringBuilder()
+        builder.append("Sender allowed: ").append(if (senderAllowed) "yes" else "no").append(" (against ").append(allowedSenders.size).append(" entries)\n")
+        builder.append("Message matches a rule: ").append(if (ruleMatches) "yes" else "no").append(" (against ").append(rules.size).append(" rules)\n")
+        builder.append("Operational channels: ").append(if (operationalChannels.isEmpty()) "none" else operationalChannels.joinToString(", ")).append('\n')
+        builder.append('\n')
+        if (wouldSend) {
+            builder.append("Would forward to ").append(operationalChannels.joinToString(", ")).append(":\n")
+            builder.append('"').append(outgoingBody).append('"')
+        } else {
+            builder.append("Would not forward.")
+        }
+
+        return TestOutcome(builder.toString(), if (wouldSend) Tone.POSITIVE else Tone.NEUTRAL)
     }
 
     fun save() {
@@ -93,5 +173,7 @@ class FiltersViewModel(application: Application) : AndroidViewModel(application)
 
     private companion object {
         const val KEY_TEMPLATE = "forwardTemplate"
+        const val KEY_LAST_TEST_SENDER = "lastTestSender"
+        const val KEY_LAST_TEST_MESSAGE = "lastTestMessage"
     }
 }

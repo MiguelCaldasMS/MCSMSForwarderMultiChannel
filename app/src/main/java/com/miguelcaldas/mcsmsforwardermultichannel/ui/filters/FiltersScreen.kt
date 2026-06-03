@@ -39,23 +39,30 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.miguelcaldas.mcsmsforwardermultichannel.R
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FiltersScreen(viewModel: FiltersViewModel, onBack: () -> Unit, onOpenTester: () -> Unit) {
+fun FiltersScreen(onBack: () -> Unit, viewModel: FiltersViewModel = viewModel()) {
     val senders by viewModel.senders.collectAsStateWithLifecycle()
     val rules by viewModel.rules.collectAsStateWithLifecycle()
     val template by viewModel.template.collectAsStateWithLifecycle()
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    // Seed the test inputs once: message from the last test (blank otherwise), sender from the
+    // last test or the first phone in the current senders list.
+    val initialTestSender = remember { viewModel.defaultTestSender() }
+    val initialTestMessage = remember { viewModel.lastTestMessage() }
 
     Scaffold(
         modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -107,13 +114,20 @@ fun FiltersScreen(viewModel: FiltersViewModel, onBack: () -> Unit, onOpenTester:
                 onRemove = { index ->
                     viewModel.removeRule(index)
                 },
-                onOpenTester = onOpenTester,
             )
 
             TemplateCard(
                 template = template,
                 onChange = { value ->
                     viewModel.setTemplate(value)
+                },
+            )
+
+            TestCard(
+                initialSender = initialTestSender,
+                initialMessage = initialTestMessage,
+                onRunTest = { sender, message ->
+                    viewModel.runTest(sender, message)
                 },
             )
 
@@ -197,13 +211,12 @@ private fun RulesCard(
     onAdd: () -> Unit,
     onChange: (Int, String) -> Unit,
     onRemove: (Int) -> Unit,
-    onOpenTester: () -> Unit,
 ) {
     Card {
         Column(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Message format rules", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Regular expressions matched against the message body (accent- and case-insensitive). A message forwards if it matches any rule. Leave empty to match every message from an allowed sender.",
+                "Regular expressions matched against the message body (accent- and case-insensitive). A message forwards if it matches any rule. With no rules, nothing is forwarded.",
                 style = MaterialTheme.typography.bodyMedium,
             )
             rules.forEachIndexed { index, rule ->
@@ -222,15 +235,10 @@ private fun RulesCard(
                     }
                 }
             }
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedButton(onClick = { onAdd() }, modifier = Modifier.weight(1f)) {
-                    Icon(painterResource(R.drawable.ic_add_24), contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Add rule")
-                }
-                OutlinedButton(onClick = onOpenTester, modifier = Modifier.weight(1f)) {
-                    Text("Regex tester")
-                }
+            OutlinedButton(onClick = { onAdd() }, modifier = Modifier.fillMaxWidth()) {
+                Icon(painterResource(R.drawable.ic_add_24), contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Add rule")
             }
         }
     }
@@ -252,5 +260,65 @@ private fun TemplateCard(template: String, onChange: (String) -> Unit) {
             )
             Spacer(Modifier.height(4.dp))
         }
+    }
+}
+
+@Composable
+private fun TestCard(
+    initialSender: String,
+    initialMessage: String,
+    onRunTest: (String, String) -> FiltersViewModel.TestOutcome,
+) {
+    var sender by rememberSaveable { mutableStateOf(initialSender) }
+    var message by rememberSaveable { mutableStateOf(initialMessage) }
+    var outcome by remember { mutableStateOf<FiltersViewModel.TestOutcome?>(null) }
+
+    Card {
+        Column(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Test a message", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Dry-run a sample sender and message against the filters shown above. This mirrors the live pipeline and never sends anything.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            OutlinedTextField(
+                value = sender,
+                onValueChange = { sender = it },
+                label = { Text("Sample sender") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = message,
+                onValueChange = { message = it },
+                label = { Text("Sample message") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Button(
+                onClick = {
+                    outcome = onRunTest(sender, message)
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Test")
+            }
+            outcome?.let { result ->
+                SelectionContainer {
+                    Text(
+                        result.text,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = toneColor(result.tone),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun toneColor(tone: FiltersViewModel.Tone): Color {
+    return when (tone) {
+        FiltersViewModel.Tone.POSITIVE -> MaterialTheme.colorScheme.primary
+        FiltersViewModel.Tone.ERROR -> MaterialTheme.colorScheme.error
+        FiltersViewModel.Tone.NEUTRAL -> MaterialTheme.colorScheme.onSurface
     }
 }
