@@ -12,10 +12,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.miguelcaldas.mcsmsforwardermultichannel.ui.channels.ChannelDetailScreen
+import com.miguelcaldas.mcsmsforwardermultichannel.ui.channels.ChannelType
 import com.miguelcaldas.mcsmsforwardermultichannel.ui.channels.ChannelsScreen
 import com.miguelcaldas.mcsmsforwardermultichannel.ui.log.LogScreen
 import com.miguelcaldas.mcsmsforwardermultichannel.ui.navigation.TopLevelDestination
@@ -26,24 +30,27 @@ fun AppRoot() {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
+    val showBottomBar = TopLevelDestination.entries.any { it.route == currentDestination?.route }
 
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                TopLevelDestination.entries.forEach { destination ->
-                    val selected = currentDestination?.hierarchy?.any { it.route == destination.route } == true
-                    NavigationBarItem(
-                        selected = selected,
-                        onClick = {
-                            navController.navigate(destination.route) {
-                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = { Icon(painterResource(destination.icon), contentDescription = null) },
-                        label = { Text(destination.label) },
-                    )
+            if (showBottomBar) {
+                NavigationBar {
+                    TopLevelDestination.entries.forEach { destination ->
+                        val selected = currentDestination?.hierarchy?.any { it.route == destination.route } == true
+                        NavigationBarItem(
+                            selected = selected,
+                            onClick = {
+                                navController.navigate(destination.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                            icon = { Icon(painterResource(destination.icon), contentDescription = null) },
+                            label = { Text(destination.label) },
+                        )
+                    }
                 }
             }
         },
@@ -72,7 +79,23 @@ fun AppRoot() {
                 )
             }
             composable(TopLevelDestination.Channels.route) {
-                ChannelsScreen()
+                ChannelsScreen(
+                    onOpenChannel = { type ->
+                        navController.navigate("channel_detail/${type.name}")
+                    },
+                )
+            }
+            composable(
+                route = "channel_detail/{type}",
+                arguments = listOf(navArgument("type") { this.type = NavType.StringType }),
+            ) { entry ->
+                val typeName = entry.arguments?.getString("type") ?: ChannelType.WhatsApp.name
+                ChannelDetailScreen(
+                    type = ChannelType.valueOf(typeName),
+                    onBack = {
+                        navController.popBackStack()
+                    },
+                )
             }
             composable(TopLevelDestination.Activity.route) {
                 LogScreen()

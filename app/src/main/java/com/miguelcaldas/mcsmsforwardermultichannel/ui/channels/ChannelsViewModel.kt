@@ -1,0 +1,211 @@
+package com.miguelcaldas.mcsmsforwardermultichannel.ui.channels
+
+import android.app.Application
+import android.content.Context
+import android.content.SharedPreferences
+import androidx.core.content.edit
+import androidx.lifecycle.AndroidViewModel
+import com.miguelcaldas.mcsmsforwardermultichannel.R
+import com.miguelcaldas.mcsmsforwardermultichannel.util.LogUtils
+import com.miguelcaldas.mcsmsforwardermultichannel.util.SecureStore
+import com.miguelcaldas.mcsmsforwardermultichannel.util.SenderListStore
+import com.miguelcaldas.mcsmsforwardermultichannel.util.SenderMatcher
+import com.miguelcaldas.mcsmsforwardermultichannel.util.SmsChannel
+import com.miguelcaldas.mcsmsforwardermultichannel.util.SmsConfig
+import com.miguelcaldas.mcsmsforwardermultichannel.util.TelegramChannel
+import com.miguelcaldas.mcsmsforwardermultichannel.util.TelegramConfig
+import com.miguelcaldas.mcsmsforwardermultichannel.util.WhatsAppCloudChannel
+import com.miguelcaldas.mcsmsforwardermultichannel.util.WhatsAppConfig
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
+/** The three outbound channels, used as nav arguments and to pick the right detail form. */
+enum class ChannelType(val title: String, val iconRes: Int) {
+    WhatsApp("WhatsApp", R.drawable.ic_forward_24),
+    Telegram("Telegram", R.drawable.ic_forward_24),
+    Sms("SMS", R.drawable.ic_forward_24),
+}
+
+/** Visual tone for a channel's one-line status. */
+enum class ChannelTone {
+    READY,
+    DISABLED,
+    INCOMPLETE,
+}
+
+/** Pre-computed row state for the channels list. */
+data class ChannelSummary(val type: ChannelType, val enabled: Boolean, val status: String, val tone: ChannelTone)
+
+class ChannelsViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val prefs: SharedPreferences = application.getSharedPreferences("mc_sms_fwd_wa", Context.MODE_PRIVATE)
+
+    private val _channels = MutableStateFlow<List<ChannelSummary>>(emptyList())
+    val channels: StateFlow<List<ChannelSummary>> = _channels.asStateFlow()
+
+    /** Recompute every channel summary. Call on resume and after any edit. */
+    fun refresh() {
+        val context = getApplication<Application>()
+        val wa = WhatsAppConfig.load(context)
+        val tg = TelegramConfig.load(context)
+        val sms = SmsConfig.load(prefs)
+
+        _channels.value = listOf(
+            summary(ChannelType.WhatsApp, wa.enabled, whatsAppStatus(wa)),
+            summary(ChannelType.Telegram, tg.enabled, telegramStatus(tg)),
+            summary(ChannelType.Sms, sms.enabled, smsStatus(sms)),
+        )
+    }
+
+    private fun summary(type: ChannelType, enabled: Boolean, statusPair: Pair<String, ChannelTone>): ChannelSummary {
+        return ChannelSummary(type, enabled, statusPair.first, statusPair.second)
+    }
+
+    private fun whatsAppStatus(config: WhatsAppConfig): Pair<String, ChannelTone> {
+        if (!config.enabled) {
+            return "Disabled" to ChannelTone.DISABLED
+        }
+        if (config.isOperational) {
+            return "Ready" to ChannelTone.READY
+        }
+        return when {
+            config.phoneNumberId.isBlank() -> "Missing Phone Number ID"
+            config.accessToken.isBlank() -> "Missing access token"
+            config.recipient.isBlank() -> "Missing recipient"
+            config.useTemplate && (config.templateName.isBlank() || config.templateLanguage.isBlank()) -> "Template not set"
+            else -> "Setup incomplete"
+        } to ChannelTone.INCOMPLETE
+    }
+
+    private fun telegramStatus(config: TelegramConfig): Pair<String, ChannelTone> {
+        if (!config.enabled) {
+            return "Disabled" to ChannelTone.DISABLED
+        }
+        if (config.isOperational) {
+            return "Ready" to ChannelTone.READY
+        }
+        return when {
+            config.botToken.isBlank() -> "Missing bot token"
+            config.chatId.isBlank() -> "Missing chat ID"
+            else -> "Setup incomplete"
+        } to ChannelTone.INCOMPLETE
+    }
+
+    private fun smsStatus(config: SmsConfig): Pair<String, ChannelTone> {
+        if (!config.enabled) {
+            return "Disabled" to ChannelTone.DISABLED
+        }
+        if (config.isOperational) {
+            return "Ready" to ChannelTone.READY
+        }
+        return "Missing destination" to ChannelTone.INCOMPLETE
+    }
+
+    fun setEnabled(type: ChannelType, enabled: Boolean) {
+        val key = when (type) {
+            ChannelType.WhatsApp -> WhatsAppConfig.KEY_ENABLED
+            ChannelType.Telegram -> TelegramConfig.KEY_ENABLED
+            ChannelType.Sms -> SmsConfig.KEY_ENABLED
+        }
+        prefs.edit {
+            putBoolean(key, enabled)
+        }
+        refresh()
+    }
+
+    fun saveWhatsApp(enabled: Boolean, phoneNumberId: String, recipient: String, useTemplate: Boolean, templateName: String, templateLanguage: String, typedToken: String) {
+        prefs.edit {
+            putBoolean(WhatsAppConfig.KEY_ENABLED, enabled)
+            putString(WhatsAppConfig.KEY_PHONE_NUMBER_ID, phoneNumberId.trim())
+            putString(WhatsAppConfig.KEY_RECIPIENT, recipient.trim())
+            putBoolean(WhatsAppConfig.KEY_USE_TEMPLATE, useTemplate)
+            putString(WhatsAppConfig.KEY_TEMPLATE_NAME, templateName.trim())
+            putString(WhatsAppConfig.KEY_TEMPLATE_LANGUAGE, templateLanguage.trim().ifBlank { WhatsAppConfig.DEFAULT_TEMPLATE_LANGUAGE })
+        }
+        // Only overwrite the encrypted token when the user actually typed one; an empty
+        // field means "keep the saved token".
+        if (typedToken.trim().isNotEmpty()) {
+            SecureStore.write(getApplication(), SecureStore.KEY_WA_ACCESS_TOKEN, typedToken.trim())
+        }
+        refresh()
+    }
+
+    fun saveTelegram(enabled: Boolean, chatId: String, typedToken: String) {
+        prefs.edit {
+            putBoolean(TelegramConfig.KEY_ENABLED, enabled)
+            putString(TelegramConfig.KEY_CHAT_ID, chatId.trim())
+        }
+        if (typedToken.trim().isNotEmpty()) {
+            SecureStore.write(getApplication(), SecureStore.KEY_TG_BOT_TOKEN, typedToken.trim())
+        }
+        refresh()
+    }
+
+    /** Returns a warning to surface, or null. Mirrors the old loop-guard heads-up. */
+    fun saveSms(enabled: Boolean, destination: String): String? {
+        prefs.edit {
+            putBoolean(SmsConfig.KEY_ENABLED, enabled)
+            putString(SmsConfig.KEY_DESTINATION, destination.trim())
+        }
+        refresh()
+        return smsDestinationLoopWarning()
+    }
+
+    private fun smsDestinationLoopWarning(): String? {
+        val config = SmsConfig.load(prefs)
+        if (!config.enabled || config.destination.isEmpty()) {
+            return null
+        }
+        val allowed = SenderListStore.load(prefs).filter { it.isNotBlank() }
+        if (allowed.isEmpty()) {
+            return null
+        }
+        val iso = SenderMatcher.deviceCountryIso(getApplication())
+        return if (SenderMatcher.matches(allowed, config.destination, iso)) {
+            "SMS destination is also an allowed sender. The loop guard will suppress its replies."
+        } else {
+            null
+        }
+    }
+
+    /** Fires a manual WhatsApp test send. Returns the message to show the user. */
+    fun sendWhatsAppTest(): String {
+        val context = getApplication<Application>()
+        val config = WhatsAppConfig.load(context)
+        if (!config.hasCredentials) {
+            return "Set Phone Number ID, access token, and recipient first."
+        }
+        if (config.useTemplate && (config.templateName.isBlank() || config.templateLanguage.isBlank())) {
+            return "Template name and language are required when 'Use template' is on."
+        }
+        val body = "MC SMS\u2192WhatsApp Test \u2014 manual test send at ${System.currentTimeMillis()}"
+        LogUtils.addToLog(context, "REAL SEND [WhatsApp] \u2192 To: ${config.recipient} | Msg: $body (manual test)")
+        WhatsAppCloudChannel.send(context, config, body)
+        return "Sending test message\u2026 see Activity log."
+    }
+
+    fun sendTelegramTest(): String {
+        val context = getApplication<Application>()
+        val config = TelegramConfig.load(context)
+        if (!config.hasCredentials) {
+            return "Set bot token and chat ID first."
+        }
+        val body = "MC SMS\u2192Telegram Test \u2014 manual test send at ${System.currentTimeMillis()}"
+        LogUtils.addToLog(context, "REAL SEND [Telegram] \u2192 To: chat ${config.chatId} | Msg: $body (manual test)")
+        TelegramChannel.send(context, config, body)
+        return "Sending Telegram test\u2026 see Activity log."
+    }
+
+    fun sendSmsTest(): String {
+        val context = getApplication<Application>()
+        val config = SmsConfig.load(prefs)
+        if (!config.hasCredentials) {
+            return "Set the SMS destination number first."
+        }
+        val body = "MC SMS\u2192SMS Test \u2014 manual test send at ${System.currentTimeMillis()}"
+        LogUtils.addToLog(context, "REAL SEND [SMS] \u2192 To: ${config.destination} | Msg: $body (manual test)")
+        SmsChannel.send(context, config, body)
+        return "Sending SMS test\u2026 see Activity log."
+    }
+}
