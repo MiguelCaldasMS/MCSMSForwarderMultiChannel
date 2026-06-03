@@ -77,7 +77,7 @@ The quickest and cheapest path is to use the **test phone number** that Meta pro
    4. Click **Generate new token** → pick your app → **Token expiration: Never** → select scopes `whatsapp_business_messaging` and `whatsapp_business_management` → **Generate token** → copy it once (you cannot view it again).
 6. In this app, open the **Channels** tab and tap **WhatsApp**: paste **WhatsApp Phone Number ID**, **Access token**, and **WhatsApp Recipient Phone Number** (full number with country code, no `+`, e.g. `351912345678`). The message template is fixed in code — it ships pointing at the prebuilt `hello_world` template, so **Send test** delivers a template message with no app content. When your own template is approved by WhatsApp, change the constants in `WhatsAppCloudChannel` to send the SMS body.
 
-The **Access token** field is write-only: once saved it loads blank with a saved hint — type a new value to replace it, or leave it blank to keep the stored token.
+The **Access token** field is write-only: once saved it pre-fills with a bullet mask standing in for the stored token (never the token itself) — leave the mask untouched to keep it, type over it to replace it, or clear the field to delete it.
 
 Notes:
 - The test number itself is permanent for the life of the WABA — do **not** delete it from *API Setup*.
