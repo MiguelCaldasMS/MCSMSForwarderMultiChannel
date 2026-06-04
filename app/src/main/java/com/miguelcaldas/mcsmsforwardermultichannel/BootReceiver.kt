@@ -12,9 +12,7 @@ import com.miguelcaldas.mcsmsforwardermultichannel.util.LogUtils
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
-            Intent.ACTION_BOOT_COMPLETED,
-            "android.intent.action.QUICKBOOT_POWERON",
-            "com.htc.intent.action.QUICKBOOT_POWERON" -> {
+            Intent.ACTION_BOOT_COMPLETED -> {
                 LogUtils.addToLog(context, "BOOT → ready to forward")
             }
         }
