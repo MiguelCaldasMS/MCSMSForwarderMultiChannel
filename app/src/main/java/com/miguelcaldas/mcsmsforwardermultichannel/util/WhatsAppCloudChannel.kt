@@ -22,7 +22,7 @@ object WhatsAppCloudChannel {
     // approved "titled_forwarded_sms" template, whose body has two {{n}} parameters:
     // {{1}} is a fixed user (TEMPLATE_USER) and {{2}} is the forwarded SMS body.
     private const val TEMPLATE_NAME = "titled_forwarded_sms"
-    private const val TEMPLATE_LANGUAGE = "en_US"
+    private const val TEMPLATE_LANGUAGE = "en"
     private const val TEMPLATE_USER = "Miguel"
 
     // Single-thread executor: serialises sends so we never open two simultaneous
