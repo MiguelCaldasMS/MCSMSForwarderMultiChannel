@@ -7,7 +7,7 @@ import android.service.quicksettings.TileService
 import androidx.core.content.edit
 import com.miguelcaldas.mcsmsforwardermultichannel.util.LogUtils
 
-class MasterSwitchTileService : TileService() {
+class MasterSwitchTileService: TileService() {
 
     override fun onStartListening() {
         super.onStartListening()

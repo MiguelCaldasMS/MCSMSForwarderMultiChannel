@@ -12,7 +12,7 @@ No dedicated test suite is configured. Use Gradle lint for static checks.
 ## Architecture
 
 Single-module Android app (`:app`), Kotlin. The UI is **Jetpack Compose** (Material 3): a single
-`MainActivity : ComponentActivity` calls `setContent { MCSmsForwarderTheme { AppRoot() } }`, and
+`MainActivity: ComponentActivity` calls `setContent { MCSmsForwarderTheme { AppRoot() } }`, and
 `AppRoot` hosts a `NavController` that routes between screens (status, channels, filters, log).
 Each screen has an `AndroidViewModel` exposing `StateFlow` draft state.
 
@@ -112,6 +112,9 @@ significant); blank rows are dropped on save and ignored by the live pipeline.
   silently treated as non-matches.
 - **Version catalog** (`gradle/libs.versions.toml`) manages all dependency and SDK versions;
   `app/build.gradle.kts` references them via `libs.*`.
+- **Kotlin formatting preference**: keep inheritance/type colons tight for class declarations
+  (`class Foo: Parent()`), and keep short immutable config/data classes on one line when the
+  full primary constructor remains readable.
 - Release signing is opt-in via Gradle properties (`RELEASE_KEYSTORE_PATH`, etc.). No keystore
   or access token is committed to the repository.
 - The WhatsApp access token and Telegram bot token are stored **encrypted at rest** via

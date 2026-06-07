@@ -7,7 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import com.miguelcaldas.mcsmsforwardermultichannel.ui.AppRoot
 import com.miguelcaldas.mcsmsforwardermultichannel.ui.theme.MCSmsForwarderTheme
 
-class MainActivity : ComponentActivity() {
+class MainActivity: ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()

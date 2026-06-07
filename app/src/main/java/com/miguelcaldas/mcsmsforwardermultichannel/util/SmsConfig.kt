@@ -10,10 +10,7 @@ import android.content.SharedPreferences
  * The only credential is the destination number; the device's own SIM/modem
  * does the actual sending, so there is no token to store.
  */
-data class SmsConfig(
-    val enabled: Boolean,
-    val destination: String,
-) {
+data class SmsConfig(val enabled: Boolean, val destination: String) {
     val hasCredentials: Boolean
         get() = destination.isNotBlank()
 

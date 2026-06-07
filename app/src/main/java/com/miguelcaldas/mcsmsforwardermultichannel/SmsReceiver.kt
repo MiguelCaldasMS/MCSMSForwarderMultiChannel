@@ -21,7 +21,7 @@ import com.miguelcaldas.mcsmsforwardermultichannel.util.WhatsAppConfig
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
-class SmsReceiver : BroadcastReceiver() {
+class SmsReceiver: BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) {
             return

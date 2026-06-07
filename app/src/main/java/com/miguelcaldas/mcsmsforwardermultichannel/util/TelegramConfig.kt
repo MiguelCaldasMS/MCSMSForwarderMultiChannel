@@ -6,11 +6,7 @@ import android.content.Context
  * Immutable snapshot of the Telegram bot credentials persisted in SharedPreferences.
  * Telegram is the second outbound channel and is opt-in: it ships disabled.
  */
-data class TelegramConfig(
-    val enabled: Boolean,
-    val botToken: String,
-    val chatId: String,
-) {
+data class TelegramConfig(val enabled: Boolean, val botToken: String, val chatId: String) {
     val hasCredentials: Boolean
         get() = botToken.isNotBlank() && chatId.isNotBlank()
 

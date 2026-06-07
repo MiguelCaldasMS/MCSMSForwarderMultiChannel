@@ -10,12 +10,7 @@ import android.content.Context
  * The message template is fixed in code (see [WhatsAppCloudChannel]); it is
  * deliberately not part of this config or the settings UI.
  */
-data class WhatsAppConfig(
-    val enabled: Boolean,
-    val phoneNumberId: String,
-    val accessToken: String,
-    val recipient: String,
-) {
+data class WhatsAppConfig(val enabled: Boolean, val phoneNumberId: String, val accessToken: String, val recipient: String) {
     val hasCredentials: Boolean
         get() = phoneNumberId.isNotBlank() && accessToken.isNotBlank() && recipient.isNotBlank()
 

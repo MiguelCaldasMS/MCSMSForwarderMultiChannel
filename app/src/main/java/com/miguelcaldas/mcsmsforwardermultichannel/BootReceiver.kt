@@ -9,7 +9,7 @@ import com.miguelcaldas.mcsmsforwardermultichannel.util.LogUtils
 // SMS arrives. Does no real work — its existence is the point: a manifest receiver
 // for BOOT_COMPLETED forces the framework to load this app at boot, which on some
 // OEMs reduces the chance of the package staying in the not-yet-launched state.
-class BootReceiver : BroadcastReceiver() {
+class BootReceiver: BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             Intent.ACTION_BOOT_COMPLETED -> {
